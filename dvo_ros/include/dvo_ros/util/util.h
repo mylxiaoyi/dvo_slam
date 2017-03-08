@@ -1,7 +1,8 @@
 /**
  *  This file is part of dvo.
  *
- *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical University of Munich)
+ *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical
+ *University of Munich)
  *  For more information see <http://vision.in.tum.de/data/software/dvo>.
  *
  *  dvo is free software: you can redistribute it and/or modify
@@ -28,37 +29,52 @@
 #include <tf_conversions/tf_eigen.h>
 
 
-namespace dvo_ros { namespace util {
-
-static void tryGetTransform(tf::Transform& result, tf::TransformListener& tl, std::string target_frame, std::string source_frame, double seconds_to_wait = 5)
+namespace dvo_ros
 {
-  if(tl.waitForTransform(target_frame, source_frame, ros::Time(), ros::Duration(seconds_to_wait), ros::Duration(0.2)))
-   {
-     tf::StampedTransform tmp;
+namespace util
+{
 
-     tl.lookupTransform(target_frame, source_frame, ros::Time(), tmp);
+static void tryGetTransform (tf::Transform& result,
+                             tf::TransformListener& tl,
+                             std::string target_frame,
+                             std::string source_frame,
+                             double seconds_to_wait = 5)
+{
+    if (tl.waitForTransform (target_frame,
+                             source_frame,
+                             ros::Time (),
+                             ros::Duration (seconds_to_wait),
+                             ros::Duration (0.2)))
+    {
+        tf::StampedTransform tmp;
 
-     result = tmp;
-   }
-   else
-   {
-     ROS_WARN("using identity!");
+        tl.lookupTransform (target_frame, source_frame, ros::Time (), tmp);
 
-     result = tf::Transform::getIdentity();
-   }
+        result = tmp;
+    }
+    else
+    {
+        ROS_WARN ("using identity!");
+
+        result = tf::Transform::getIdentity ();
+    }
 }
 
-static void tryGetTransform(Eigen::Affine3d& result, tf::TransformListener& tl, std::string target_frame, std::string source_frame, double seconds_to_wait = 5)
+static void tryGetTransform (Eigen::Affine3d& result,
+                             tf::TransformListener& tl,
+                             std::string target_frame,
+                             std::string source_frame,
+                             double seconds_to_wait = 5)
 {
-  tf::Transform tmp;
+    tf::Transform tmp;
 
-  tryGetTransform(tmp, tl, target_frame, source_frame, seconds_to_wait);
+    tryGetTransform (tmp, tl, target_frame, source_frame, seconds_to_wait);
 
-  tf::TransformTFToEigen(tmp, result);
+    tf::transformTFToEigen (tmp, result);
 }
 
-} /* namespace util */ } /* namespace dvo_ros */
-
+} /* namespace util */
+} /* namespace dvo_ros */
 
 
 #endif /* UTIL_H_ */

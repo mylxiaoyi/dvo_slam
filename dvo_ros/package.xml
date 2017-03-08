@@ -1,0 +1,21 @@
+<package>
+  <name>dvo_ros</name>
+  <version>0.0.1</version>
+  <description>
+
+     dvo_ros
+
+  </description>
+  <author>Christian Kerl</author>
+  <license>GPL</license>
+  <maintainer email="author@email.com">author</maintainer>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>dynamic_reconfigure</build_depend>
+  <build_depend>cv_bridge</build_depend>
+  <build_depend>dvo_core</build_depend>
+  <build_depend>tf</build_depend>
+
+</package>
+
+

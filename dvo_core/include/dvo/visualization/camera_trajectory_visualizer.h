@@ -1,7 +1,8 @@
 /**
  *  This file is part of dvo.
  *
- *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical University of Munich)
+ *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical
+ *University of Munich)
  *  For more information see <http://vision.in.tum.de/data/software/dvo>.
  *
  *  dvo is free software: you can redistribute it and/or modify
@@ -36,99 +37,101 @@ namespace visualization
 struct Color
 {
 public:
-  static const Color& red()
-  {
-    static Color red(1.0, 0.2, 0.2);
-    return red;
-  }
-  static const Color& green()
-  {
-    static Color green(0.2, 1.0, 0.2);
-    return green;
-  }
-  static const Color& blue()
-  {
-    static Color blue(0.2, 0.2, 1.0);
-    return blue;
-  }
+    static const Color& red ()
+    {
+        static Color red (1.0, 0.2, 0.2);
+        return red;
+    }
+    static const Color& green ()
+    {
+        static Color green (0.2, 1.0, 0.2);
+        return green;
+    }
+    static const Color& blue ()
+    {
+        static Color blue (0.2, 0.2, 1.0);
+        return blue;
+    }
 
-  Color() :
-    r(0), g(0), b(0)
-  {
-  }
-  Color(double r, double g, double b) :
-    r(r), g(g), b(b)
-  {
-  }
+    Color () : r (0), g (0), b (0)
+    {
+    }
+    Color (double r, double g, double b) : r (r), g (g), b (b)
+    {
+    }
 
-  double r, g, b;
+    double r, g, b;
 };
 
 class CameraVisualizer
 {
 public:
-  enum Option
-  {
-    ShowCameraAndCloud,
-    ShowCamera,
-    ShowNothing
-  };
+    enum Option
+    {
+        ShowCameraAndCloud,
+        ShowCamera,
+        ShowNothing
+    };
 
-  typedef boost::shared_ptr<CameraVisualizer> Ptr;
+    typedef boost::shared_ptr<CameraVisualizer> Ptr;
 
-  typedef void OnClickCallbackSignature(const CameraVisualizer&);
-  typedef boost::function<OnClickCallbackSignature> OnClickCallback;
+    typedef void OnClickCallbackSignature (const CameraVisualizer&);
+    typedef boost::function<OnClickCallbackSignature> OnClickCallback;
 
-  virtual ~CameraVisualizer() {};
-  FI_ATTRIBUTE(CameraVisualizer, std::string, name);
-  FI_ATTRIBUTE(CameraVisualizer, Color, color);
+    virtual ~CameraVisualizer (){};
+    FI_ATTRIBUTE (CameraVisualizer, std::string, name);
+    FI_ATTRIBUTE (CameraVisualizer, Color, color);
 
-  virtual CameraVisualizer& onclick(const OnClickCallback& callback) { return *this; }
+    virtual CameraVisualizer& onclick (const OnClickCallback& callback)
+    {
+        return *this;
+    }
 
-  virtual void show(Option option = ShowCameraAndCloud) = 0;
-  virtual void hide() = 0;
-  virtual CameraVisualizer& update(const dvo::core::RgbdImage& img, const Eigen::Affine3d& pose) = 0;
+    virtual void show (Option option = ShowCameraAndCloud) = 0;
+    virtual void hide () = 0;
+    virtual CameraVisualizer&
+    update (const dvo::core::RgbdImage& img, const Eigen::Affine3d& pose) = 0;
 };
 
 class TrajectoryVisualizer
 {
 public:
-  typedef boost::shared_ptr<TrajectoryVisualizer> Ptr;
+    typedef boost::shared_ptr<TrajectoryVisualizer> Ptr;
 
-  virtual ~TrajectoryVisualizer() {};
-  FI_ATTRIBUTE(TrajectoryVisualizer, std::string, name);
-  FI_ATTRIBUTE(TrajectoryVisualizer, Color, color);
+    virtual ~TrajectoryVisualizer (){};
+    FI_ATTRIBUTE (TrajectoryVisualizer, std::string, name);
+    FI_ATTRIBUTE (TrajectoryVisualizer, Color, color);
 
-  virtual TrajectoryVisualizer& add(const Eigen::Affine3d& pose) = 0;
+    virtual TrajectoryVisualizer& add (const Eigen::Affine3d& pose) = 0;
 };
 
 class CameraTrajectoryVisualizerInterface
 {
 public:
-  virtual ~CameraTrajectoryVisualizerInterface() {};
+    virtual ~CameraTrajectoryVisualizerInterface (){};
 
-  virtual CameraVisualizer::Ptr camera(std::string name) = 0;
-  virtual TrajectoryVisualizer::Ptr trajectory(std::string name) = 0;
+    virtual CameraVisualizer::Ptr camera (std::string name) = 0;
+    virtual TrajectoryVisualizer::Ptr trajectory (std::string name) = 0;
 
-  virtual void reset() = 0;
+    virtual void reset () = 0;
 
-  virtual bool native(void*& native_visualizer)
-  {
-    native_visualizer = 0;
-    return false;
-  }
+    virtual bool native (void*& native_visualizer)
+    {
+        native_visualizer = 0;
+        return false;
+    }
 };
 
 class NoopCameraTrajectoryVisualizer : public CameraTrajectoryVisualizerInterface
 {
 public:
-  NoopCameraTrajectoryVisualizer();
-  virtual ~NoopCameraTrajectoryVisualizer();
+    NoopCameraTrajectoryVisualizer ();
+    virtual ~NoopCameraTrajectoryVisualizer ();
 
-  virtual CameraVisualizer::Ptr camera(std::string name);
-  virtual TrajectoryVisualizer::Ptr trajectory(std::string name);
+    virtual CameraVisualizer::Ptr camera (std::string name);
+    virtual TrajectoryVisualizer::Ptr trajectory (std::string name);
 
-  virtual void reset();
+    virtual void reset ();
 };
 
 } /* namespace visualization */

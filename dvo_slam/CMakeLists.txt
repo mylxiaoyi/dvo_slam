@@ -1,34 +1,50 @@
 cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
-# Set the build type.  Options are:
-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
-#  Debug          : w/ debug symbols, w/o optimization
-#  Release        : w/o debug symbols, w/ optimization
-#  RelWithDebInfo : w/ debug symbols, w/ optimization
-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-#set(ROS_BUILD_TYPE RelWithDebInfo)
+project(dvo_slam)
 
-rosbuild_init()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O3 -msse4 -msse4.2")
 
-#set the default path for built executables to the "bin" directory
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-#set the default path for built libraries to the "lib" directory
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    rospy
+    dynamic_reconfigure
+    dvo_core
+    dvo_ros    
+    std_msgs
+    geometry_msgs
+    message_generation
+)
 
-# dynamic reconfigure
-rosbuild_find_ros_package(dynamic_reconfigure)
-include(${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake)
-gencfg()
+generate_dynamic_reconfigure_options(cfg/dvo_slam.cfg cfg/graph_visualizer.cfg)
 
-# messages
-rosbuild_genmsg()
+add_message_files(
+    FILES
+    PoseStampedArray.msg
+)
+
+generate_messages(
+    DEPENDENCIES
+    std_msgs
+    geometry_msgs
+)
+
+include_directories(
+    include
+    cfg/cpp
+    ${catkin_INCLUDE_DIRS}
+    /usr/include/suitesparse
+)
+
+catkin_package(
+    INCLUDE_DIRS include cfg/cpp
+    LIBRARIES ${PROJECT_NAME}
+)
 
 # VTK library
-find_package(VTK REQUIRED)
-include_directories(${VTK_INCLUDE_DIRS})
+find_package(PCL REQUIRED COMPONENTS common visualization)
+include_directories(${PCL_INCLUDE_DIRS})
 
-rosbuild_add_library(${PROJECT_NAME} 
+add_library(${PROJECT_NAME} 
   src/keyframe_tracker.cpp
   src/keyframe_graph.cpp
   src/keyframe_constraint_search.cpp
@@ -57,11 +73,13 @@ target_link_libraries(${PROJECT_NAME}
   g2o_solver_dense
   g2o_solver_csparse
   g2o_csparse_extension
-  csparse
+  cxsparse
   g2o_types_slam3d
+  ${PCL_LIBRARIES}
+  ${catkin_LIBRARIES}
 )
 
-rosbuild_add_executable(camera_keyframe_tracker
+add_executable(camera_keyframe_tracker
   src/camera_keyframe_tracker_node.cpp
 )
 

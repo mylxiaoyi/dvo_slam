@@ -1,7 +1,8 @@
 /**
  *  This file is part of dvo.
  *
- *  Copyright 2013 Christian Kerl <christian.kerl@in.tum.de> (Technical University of Munich)
+ *  Copyright 2013 Christian Kerl <christian.kerl@in.tum.de> (Technical
+ *University of Munich)
  *  For more information see <http://vision.in.tum.de/data/software/dvo>.
  *
  *  dvo is free software: you can redistribute it and/or modify
@@ -34,72 +35,84 @@ namespace dvo_slam
 
 namespace internal
 {
-  struct LocalTrackerImpl;
+struct LocalTrackerImpl;
 } /* namespace internal */
 
 class LocalTracker
 {
 public:
-  typedef ::dvo::DenseTracker::Result TrackingResult;
+    typedef ::dvo::DenseTracker::Result TrackingResult;
 
-  struct All
-  {
-    typedef bool result_type;
-
-    template<typename InputIterator>
-    bool operator()(InputIterator first, InputIterator last) const
+    struct All
     {
-      int i = 0;
-      bool result = true;
-      //std::cerr << "votes: ";
-      for(;first != last; ++first)
-      {
-        bool tmp = *first;
-        result = result && tmp;
+        typedef bool result_type;
 
-        //std::cerr << tmp << " ";
-        i++;
-      }
+        template <typename InputIterator>
+        bool operator()(InputIterator first, InputIterator last) const
+        {
+            int i = 0;
+            bool result = true;
+            // std::cerr << "votes: ";
+            for (; first != last; ++first)
+            {
+                bool tmp = *first;
+                result = result && tmp;
 
-      //std::cerr << std::endl;
+                // std::cerr << tmp << " ";
+                i++;
+            }
 
-      return result;
-    }
-  };
+            // std::cerr << std::endl;
 
-  typedef boost::signals2::signal<bool (const dvo_slam::LocalTracker&, const dvo_slam::LocalTracker::TrackingResult&, const dvo_slam::LocalTracker::TrackingResult&), dvo_slam::LocalTracker::All> AcceptSignal;
-  typedef AcceptSignal::slot_type AcceptCallback;
-  typedef boost::signals2::signal<void (const dvo_slam::LocalTracker&, const dvo_slam::LocalMap::Ptr&, const dvo_slam::LocalTracker::TrackingResult&)> MapInitializedSignal;
-  typedef MapInitializedSignal::slot_type MapInitializedCallback;
-  typedef boost::signals2::signal<void (const dvo_slam::LocalTracker&, const dvo_slam::LocalMap::Ptr&)> MapCompleteSignal;
-  typedef MapCompleteSignal::slot_type MapCompleteCallback;
+            return result;
+        }
+    };
 
-  LocalTracker();
-  virtual ~LocalTracker();
+    typedef boost::signals2::signal<bool(const dvo_slam::LocalTracker&,
+                                         const dvo_slam::LocalTracker::TrackingResult&,
+                                         const dvo_slam::LocalTracker::TrackingResult&),
+                                    dvo_slam::LocalTracker::All> AcceptSignal;
+    typedef AcceptSignal::slot_type AcceptCallback;
+    typedef boost::signals2::signal<
+    void(const dvo_slam::LocalTracker&, const dvo_slam::LocalMap::Ptr&, const dvo_slam::LocalTracker::TrackingResult&)> MapInitializedSignal;
+    typedef MapInitializedSignal::slot_type MapInitializedCallback;
+    typedef boost::signals2::signal<void(const dvo_slam::LocalTracker&, const dvo_slam::LocalMap::Ptr&)> MapCompleteSignal;
+    typedef MapCompleteSignal::slot_type MapCompleteCallback;
 
-  dvo_slam::LocalMap::Ptr getLocalMap() const;
+    LocalTracker ();
+    virtual ~LocalTracker ();
 
-  void getCurrentPose(dvo::core::AffineTransformd& pose);
+    dvo_slam::LocalMap::Ptr getLocalMap () const;
 
-  void initNewLocalMap(const dvo::core::RgbdImagePyramid::Ptr& keyframe, const dvo::core::RgbdImagePyramid::Ptr& frame, const dvo::core::AffineTransformd& keyframe_pose = dvo::core::AffineTransformd::Identity());
+    void getCurrentPose (dvo::core::AffineTransformd& pose);
 
-  const dvo::DenseTracker::Config& configuration() const;
+    void initNewLocalMap (const dvo::core::RgbdImagePyramid::Ptr& keyframe,
+                          const dvo::core::RgbdImagePyramid::Ptr& frame,
+                          const dvo::core::AffineTransformd& keyframe_pose =
+                          dvo::core::AffineTransformd::Identity ());
 
-  void configure(const dvo::DenseTracker::Config& config);
+    const dvo::DenseTracker::Config& configuration () const;
 
-  void update(const dvo::core::RgbdImagePyramid::Ptr& image, dvo::core::AffineTransformd& pose);
+    void configure (const dvo::DenseTracker::Config& config);
 
-  void forceCompleteCurrentLocalMap();
+    void update (const dvo::core::RgbdImagePyramid::Ptr& image,
+                 dvo::core::AffineTransformd& pose);
 
-  boost::signals2::connection addAcceptCallback(const AcceptCallback& callback);
-  boost::signals2::connection addMapInitializedCallback(const MapInitializedCallback& callback);
-  boost::signals2::connection addMapCompleteCallback(const MapCompleteCallback& callback);
+    void forceCompleteCurrentLocalMap ();
+
+    boost::signals2::connection addAcceptCallback (const AcceptCallback& callback);
+    boost::signals2::connection
+    addMapInitializedCallback (const MapInitializedCallback& callback);
+    boost::signals2::connection addMapCompleteCallback (const MapCompleteCallback& callback);
+
 private:
-  boost::scoped_ptr<internal::LocalTrackerImpl> impl_;
-  dvo_slam::LocalMap::Ptr local_map_;
+    boost::scoped_ptr<internal::LocalTrackerImpl> impl_;
+    dvo_slam::LocalMap::Ptr local_map_;
 
-  void initNewLocalMap(const dvo::core::RgbdImagePyramid::Ptr& keyframe, const dvo::core::RgbdImagePyramid::Ptr& frame, TrackingResult& r_odometry, const dvo::core::AffineTransformd& keyframe_pose);
-
+    void initNewLocalMap (const dvo::core::RgbdImagePyramid::Ptr& keyframe,
+                          const dvo::core::RgbdImagePyramid::Ptr& frame,
+                          TrackingResult& r_odometry,
+                          const dvo::core::AffineTransformd& keyframe_pose);
 };
 
 } /* namespace dvo_slam */

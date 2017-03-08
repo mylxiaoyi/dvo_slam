@@ -1,7 +1,8 @@
 /**
  *  This file is part of dvo.
  *
- *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical University of Munich)
+ *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical
+ *University of Munich)
  *  For more information see <http://vision.in.tum.de/data/software/dvo>.
  *
  *  dvo is free software: you can redistribute it and/or modify
@@ -37,31 +38,34 @@ namespace visualization
 class AsyncPointCloudBuilder
 {
 public:
-  typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
-  typedef boost::function<void (const PointCloud::Ptr& cloud)> DoneCallback;
+    typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
+    typedef boost::function<void(const PointCloud::Ptr& cloud)> DoneCallback;
 
-  struct BuildJob
-  {
-  public:
-    dvo::core::RgbdImage image;
-    const Eigen::Affine3d pose;
+    struct BuildJob
+    {
+    public:
+        dvo::core::RgbdImage image;
+        const Eigen::Affine3d pose;
 
-    BuildJob(const dvo::core::RgbdImage& image, const Eigen::Affine3d pose = Eigen::Affine3d::Identity());
+        BuildJob (const dvo::core::RgbdImage& image,
+                  const Eigen::Affine3d pose = Eigen::Affine3d::Identity ());
 
-    AsyncPointCloudBuilder::PointCloud::Ptr build();
-  private:
-    AsyncPointCloudBuilder::PointCloud::Ptr cloud_;
-  };
+        AsyncPointCloudBuilder::PointCloud::Ptr build ();
 
-  AsyncPointCloudBuilder();
-  virtual ~AsyncPointCloudBuilder();
+    private:
+        AsyncPointCloudBuilder::PointCloud::Ptr cloud_;
+    };
 
-  void build(const dvo::core::RgbdImage& image, const Eigen::Affine3d pose = Eigen::Affine3d::Identity());
+    AsyncPointCloudBuilder ();
+    virtual ~AsyncPointCloudBuilder ();
 
-  void done(DoneCallback& callback);
+    void build (const dvo::core::RgbdImage& image,
+                const Eigen::Affine3d pose = Eigen::Affine3d::Identity ());
+
+    void done (DoneCallback& callback);
 
 private:
-  DoneCallback done_;
+    DoneCallback done_;
 };
 
 } /* namespace visualization */

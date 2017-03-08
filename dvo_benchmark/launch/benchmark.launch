@@ -1,6 +1,6 @@
 <launch>
-  <arg name="dataset" default="$(env PWD)" />
-  <arg name="rgbdpair_file" default="$(arg dataset)/assoc.txt" />
+  <arg name="dataset" default="/media/datadisk/slamdataset/tum_rgbd/all_bags/rgbd_dataset_freiburg1_xyz" />
+  <arg name="rgbdpair_file" default="$(arg dataset)/association.txt" />
   <arg name="groundtruth_file" default="$(arg dataset)/groundtruth.txt" />
 
   <arg name="launch_dir" value="$(find dvo_benchmark)/launch" />
@@ -21,7 +21,7 @@
   <env name="ROSCONSOLE_CONFIG_FILE" value="$(arg launch_dir)/benchmark_logging.config" />
   <env name="ROSCONSOLE_FORMAT"      value="${logger}: { ${message} }" />
 
-  <node launch-prefix="$(arg launch_prefix)" pkg="dvo_benchmark" type="benchmark" name="benchmark" output="screen">
+  <node launch-prefix="$(arg launch_prefix)" pkg="dvo_benchmark" type="dvo_benchmark" name="dvo_benchmark" output="screen">
     <param type="string" name="rgbdpair_file" value="$(arg rgbdpair_file)" />
     <param type="string" name="groundtruth_file" value="$(arg groundtruth_file)" />
     
