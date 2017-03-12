@@ -27,12 +27,13 @@ CameraBase::CameraBase(ros::NodeHandle& nh, ros::NodeHandle& nh_private) :
   nh_(nh),
   nh_private_(nh_private),
 
-  rgb_image_subscriber_(nh, "camera/rgb/image_rect", 1),
-  depth_image_subscriber_(nh, "camera/depth_registered/image_rect_raw", 1),
+  rgb_image_subscriber_(nh, "camera/rgb/image_raw", 1),
+  depth_image_subscriber_(nh, "camera/depth/image_raw", 1),
   rgb_camera_info_subscriber_(nh, "camera/rgb/camera_info", 1),
   depth_camera_info_subscriber_(nh, "camera/depth_registered/camera_info", 1),
 
   synchronizer_(RGBDWithCameraInfoPolicy(5), rgb_image_subscriber_, depth_image_subscriber_, rgb_camera_info_subscriber_, depth_camera_info_subscriber_),
+  rgbd_synchronizer_(RGBDPolicy(10), rgb_image_subscriber_, depth_image_subscriber_),
 
   connected(false)
 {
@@ -52,7 +53,8 @@ void CameraBase::startSynchronizedImageStream()
 {
   if(!connected)
   {
-    connection = synchronizer_.registerCallback(boost::bind(&CameraBase::handleImages, this, _1, _2, _3, _4));
+//    connection = synchronizer_.registerCallback(boost::bind(&CameraBase::handleImages, this, _1, _2, _3, _4));
+    connection = rgbd_synchronizer_.registerCallback(boost::bind(&CameraBase::handleImages, this, _1, _2));
     connected = true;
   }
 }

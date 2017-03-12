@@ -95,6 +95,11 @@ public:
       const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg
   );
 
+  virtual void handleImages(
+      const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+      const sensor_msgs::Image::ConstPtr& depth_image_msg
+  );
+
   void handlePose(const geometry_msgs::PoseWithCovarianceStampedConstPtr& pose);
 
   void handleConfig(dvo_ros::CameraDenseTrackerConfig& config, uint32_t level);

@@ -308,6 +308,128 @@ void CameraDenseTracker::handleImages(
   sw_callback.stopAndPrint();
 }
 
+void CameraDenseTracker::handleImages(
+    const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+    const sensor_msgs::Image::ConstPtr& depth_image_msg
+)
+{
+//  static stopwatch sw_callback("callback");
+//  sw_callback.start();
+
+//  // lock tracker so no one can reconfigure it
+//  boost::mutex::scoped_lock lock(tracker_mutex_);
+
+//  // different size of rgb and depth image
+//  if(depth_camera_info_msg->width != rgb_camera_info_msg->width || depth_camera_info_msg->height != rgb_camera_info_msg->height)
+//  {
+//    ROS_WARN("RGB and depth image have different size!");
+
+//    return;
+//  }
+
+//  // something has changed
+//  if(hasChanged(rgb_camera_info_msg))
+//  {
+//    ROS_WARN("RGB image size has changed, resetting tracker!");
+
+//    reset(rgb_camera_info_msg);
+//  }
+
+//  cv::Mat intensity, depth;
+//  cv::Mat rgb_in = cv_bridge::toCvShare(rgb_image_msg)->image;
+
+//  if(rgb_in.channels() == 3)
+//  {
+//    cv::Mat tmp;
+//    cv::cvtColor(rgb_in, tmp, CV_BGR2GRAY, 1);
+
+//    tmp.convertTo(intensity, CV_32F);
+//  }
+//  else
+//  {
+//    rgb_in.convertTo(intensity, CV_32F);
+//  }
+
+//  cv::Mat depth_in = cv_bridge::toCvShare(depth_image_msg)->image;
+
+//  if(depth_in.type() == CV_16UC1)
+//  {
+//    SurfacePyramid::convertRawDepthImageSse(depth_in, depth, 0.001);
+//  }
+//  else
+//  {
+//    depth = depth_in;
+//  }
+
+//  reference.swap(current);
+//  current = camera->create(intensity, depth);
+
+//  // time delay compensation TODO: use driver settings instead
+//  std_msgs::Header h = rgb_image_msg->header;
+//  //h.stamp -= ros::Duration(0.05);
+
+//  static Eigen::Affine3d first;
+
+//  if(!reference)
+//  {
+//    accumulated_transform = latest_absolute_transform_ * from_baselink_to_asus;
+//    first = accumulated_transform;
+
+//    vis_->camera("first")->
+//        color(dvo::visualization::Color::blue()).
+//        update(current->level(0), accumulated_transform).
+//        show();
+
+//    return;
+//  }
+
+//  Eigen::Affine3d transform;
+
+//  static stopwatch sw_match("match", 100);
+//  sw_match.start();
+
+//  bool success = tracker->match(*reference, *current, transform);
+
+//  sw_match.stopAndPrint();
+
+//  if(success)
+//  {
+//    frames_since_last_success = 0;
+//    accumulated_transform = accumulated_transform * transform;
+
+//    Eigen::Matrix<double, 6, 6> covariance;
+
+//    //tracker->getCovarianceEstimate(covariance);
+
+//    //std::cerr << covariance << std::endl << std::endl;
+
+//    vis_->trajectory("estimate")->
+//        color(dvo::visualization::Color::red())
+//        .add(accumulated_transform);
+
+//    vis_->camera("current")->
+//        color(dvo::visualization::Color::red()).
+//        update(current->level(0), accumulated_transform).
+//        show();
+//  }
+//  else
+//  {
+//    frames_since_last_success++;
+//    reference.swap(current);
+//    ROS_WARN("fail");
+//  }
+
+//  publishTransform(h, accumulated_transform * from_baselink_to_asus.inverse(), "base_link_estimate");
+////  publishTransform(rgb_image_msg->header, first_transform.inverse() * accumulated_transform, "asus_estimate");
+
+//  if(use_dense_tracking_estimate_)
+//  {
+//    publishPose(h, accumulated_transform * from_baselink_to_asus.inverse(), "baselink_estimate");
+//  }
+
+//  sw_callback.stopAndPrint();
+}
+
 void CameraDenseTracker::publishTransform(const std_msgs::Header& header, const Eigen::Affine3d& transform, const std::string frame)
 {
   static tf::TransformBroadcaster tb;

@@ -31,7 +31,7 @@ namespace dvo_ros
 class CameraTrackerNodelet : public nodelet::Nodelet
 {
 private:
-  std::auto_ptr<dvo_ros::CameraDenseTracker> tracker_;
+  std::unique_ptr<dvo_ros::CameraDenseTracker> tracker_;
 public:
   CameraTrackerNodelet();
   virtual ~CameraTrackerNodelet();

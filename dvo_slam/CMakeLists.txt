@@ -13,7 +13,7 @@ find_package(G2O REQUIRED)
 #find_package(OpenCV REQUIRED)
 find_package(TBB REQUIRED)
 
-LIST(APPEND CMAKE_CXX_FLAGS "-std=c++11")
+LIST(APPEND CMAKE_CXX_FLAGS "-std=c++11 -g -O3 -msse4 -msse4.2")
 
 if(G2O_FOUND)
   message(STATUS "Found G2O")
@@ -81,12 +81,12 @@ target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 
-#add_executable(camera_keyframe_tracker
-#  src/camera_keyframe_tracker_node.cpp
-#)
+add_executable(camera_keyframe_tracker
+  src/camera_keyframe_tracker_node.cpp
+)
 
-#target_link_libraries(camera_keyframe_tracker
-#  ${PROJECT_NAME}
-#)
+target_link_libraries(camera_keyframe_tracker
+  ${PROJECT_NAME}
+)
 
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg)

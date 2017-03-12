@@ -83,6 +83,11 @@ bool CameraKeyframeTracker::hasChanged(const sensor_msgs::CameraInfo::ConstPtr& 
   return width != camera_info_msg->width || height != camera_info_msg->height;
 }
 
+bool CameraKeyframeTracker::hasChanged(const cv::Mat &img)
+{
+  return width != img.cols || height != img.rows;
+}
+
 void CameraKeyframeTracker::reset(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg)
 {
   //intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0], camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
@@ -103,6 +108,30 @@ void CameraKeyframeTracker::reset(const sensor_msgs::CameraInfo::ConstPtr& camer
 
   width = camera_info_msg->width;
   height = camera_info_msg->height;
+
+  vis_->reset();
+}
+
+void CameraKeyframeTracker::reset(const cv::Mat &img)
+{
+  //intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0], camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
+  intrinsics = IntrinsicMatrix::create(517.306408, 516.469215, 318.643040, 255.313989);
+  camera.reset(new dvo::core::RgbdCameraPyramid(img.cols, img.rows, intrinsics));
+  camera->build(tracker_cfg.getNumLevels());
+
+  keyframe_tracker.reset(new KeyframeTracker(graph_vis_));
+  keyframe_tracker->configureTracking(tracker_cfg);
+  keyframe_tracker->configureKeyframeSelection(keyframe_tracker_cfg);
+  keyframe_tracker->configureMapping(graph_cfg);
+  keyframe_tracker->addMapChangedCallback(boost::bind(&CameraKeyframeTracker::onMapChanged, this, _1));
+
+  static RgbdImagePyramid* const __null__ = 0;
+
+  reference.reset(__null__);
+  current.reset(__null__);
+
+  width = img.cols;
+  height = img.rows;
 
   vis_->reset();
 }
@@ -280,6 +309,106 @@ void CameraKeyframeTracker::handleImages(
   //vis_->trajectory("estimate")->
   //    color(dvo::visualization::Color::red())
   //    .add(accumulated_transform);
+
+  vis_->camera("current")->
+      color(dvo::visualization::Color::red()).
+      update(current->level(0), accumulated_transform).
+      show(dvo::visualization::CameraVisualizer::ShowCamera);
+
+  publishTransform(h, accumulated_transform, "base_link_estimate");
+
+  sw_callback.stopAndPrint();
+}
+
+void CameraKeyframeTracker::handleImages(
+    const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+    const sensor_msgs::Image::ConstPtr& depth_image_msg
+)
+{
+    ROS_INFO_STREAM("hello from handleImages");
+  static stopwatch sw_callback("callback");
+  sw_callback.start();
+
+  // lock tracker so no one can reconfigure it
+  boost::mutex::scoped_lock lock(tracker_mutex_);
+
+  cv::Mat rgb_in = cv_bridge::toCvShare(rgb_image_msg)->image;
+
+  cv::Mat depth_in = cv_bridge::toCvShare(depth_image_msg)->image;
+
+  // different size of rgb and depth image
+  if(rgb_in.rows != depth_in.rows || rgb_in.cols != depth_in.cols)
+  {
+    ROS_WARN("RGB and depth image have different size!");
+
+    return;
+  }
+
+  // something has changed
+  if(hasChanged(rgb_in))
+  {
+    ROS_WARN("RGB image size has changed, resetting tracker!");
+
+    reset(rgb_in);
+  }
+
+  cv::Mat intensity, depth;
+
+  if(rgb_in.channels() == 3)
+  {
+    cv::Mat tmp;
+    cv::cvtColor(rgb_in, tmp, CV_BGR2GRAY, 1);
+
+    tmp.convertTo(intensity, CV_32F);
+  }
+  else
+  {
+    rgb_in.convertTo(intensity, CV_32F);
+  }
+
+  if(depth_in.type() == CV_16UC1)
+  {
+    SurfacePyramid::convertRawDepthImageSse(depth_in, depth, 0.001);
+  }
+  else
+  {
+    depth = depth_in;
+  }
+
+  reference.swap(current);
+  current = camera->create(intensity, depth);
+
+  if(rgb_in.channels() == 3)
+  {
+    rgb_in.convertTo(current->level(0).rgb, CV_32FC3);
+  }
+
+  // time delay compensation TODO: use driver settings instead
+  std_msgs::Header h = rgb_image_msg->header;
+  //h.stamp -= ros::Duration(0.05);
+
+  static Eigen::Affine3d first;
+
+  if(!reference)
+  {
+    accumulated_transform.setIdentity();
+    keyframe_tracker->init(accumulated_transform);
+
+    return;
+  }
+
+  Eigen::Affine3d transform, last_transform;
+
+  static stopwatch sw_match("match", 100);
+  sw_match.start();
+
+  keyframe_tracker->update(current, h.stamp, accumulated_transform);
+
+  sw_match.stopAndPrint();
+
+  vis_->trajectory("estimate")->
+      color(dvo::visualization::Color::red())
+      .add(accumulated_transform);
 
   vis_->camera("current")->
       color(dvo::visualization::Color::red()).

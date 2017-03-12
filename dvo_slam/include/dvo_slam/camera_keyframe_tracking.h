@@ -85,7 +85,9 @@ private:
   boost::mutex tracker_mutex_;
 
   bool hasChanged(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
+  bool hasChanged(const cv::Mat &img);
   void reset(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
+  void reset(const cv::Mat &img);
 
   void publishTransform(const std_msgs::Header& header, const Eigen::Affine3d& transform, const std::string frame);
 
@@ -99,6 +101,11 @@ public:
       const sensor_msgs::Image::ConstPtr& depth_image_msg,
       const sensor_msgs::CameraInfo::ConstPtr& rgb_camera_info_msg,
       const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg
+  );
+
+  virtual void handleImages(
+      const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+      const sensor_msgs::Image::ConstPtr& depth_image_msg
   );
 
   void handleTrackerConfig(dvo_ros::CameraDenseTrackerConfig& config, uint32_t level);
