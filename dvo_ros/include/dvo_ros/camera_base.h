@@ -37,6 +37,8 @@ namespace dvo_ros
 
 typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> RGBDWithCameraInfoPolicy;
 
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> RGBDPolicy;
+
 class CameraBase
 {
 protected:
@@ -49,6 +51,7 @@ protected:
     message_filters::Subscriber<sensor_msgs::CameraInfo> depth_camera_info_subscriber_;
 
     message_filters::Synchronizer<RGBDWithCameraInfoPolicy> synchronizer_;
+    message_filters::Synchronizer<RGBDPolicy> rgbd_synchronizer_;
 
     bool isSynchronizedImageStreamRunning ();
 
@@ -64,6 +67,10 @@ public:
                   const sensor_msgs::Image::ConstPtr& depth_image_msg,
                   const sensor_msgs::CameraInfo::ConstPtr& rgb_camera_info_msg,
                   const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg) = 0;
+
+    virtual void
+    handleImages (const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+                  const sensor_msgs::Image::ConstPtr& depth_image_msg) = 0;
 
 private:
     message_filters::Connection connection;

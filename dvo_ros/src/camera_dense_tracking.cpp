@@ -31,8 +31,8 @@
 //#include <dvo/visualization/pcl_camera_trajectory_visualizer.h>
 
 #include <dvo_ros/camera_dense_tracking.h>
-#include <dvo_ros/util/util.h>
 #include <dvo_ros/util/configtools.h>
+#include <dvo_ros/util/util.h>
 #include <dvo_ros/visualization/ros_camera_trajectory_visualizer.h>
 
 
@@ -54,21 +54,20 @@ CameraDenseTracker::CameraDenseTracker (ros::NodeHandle& nh, ros::NodeHandle& nh
     ROS_INFO ("CameraDenseTracker::ctor(...)");
 
     pose_pub_ =
-    nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("rgbd/pose", 1);
+    nh.advertise<geometry_msgs::PoseWithCovarianceStamped> ("rgbd/pose", 1);
 
     ReconfigureServer::CallbackType reconfigure_server_callback =
     boost::bind (&CameraDenseTracker::handleConfig, this, _1, _2);
     reconfigure_server_.setCallback (reconfigure_server_callback);
 
-    dvo_ros::util::tryGetTransform (from_baselink_to_asus,
-                                    tl,
-                                    "base_link",
+    dvo_ros::util::tryGetTransform (from_baselink_to_asus, tl, "base_link",
                                     "asus");
 
     ROS_INFO_STREAM ("transformation: base_link -> asus"
-                     << std::endl << from_baselink_to_asus.matrix ());
+                     << std::endl
+                     << from_baselink_to_asus.matrix ());
 
-    pose_sub_ = nh.subscribe<geometry_msgs::PoseWithCovarianceStamped>(
+    pose_sub_ = nh.subscribe<geometry_msgs::PoseWithCovarianceStamped> (
     "pelican/pose", 1, &CameraDenseTracker::handlePose, this);
 
     latest_absolute_transform_.setIdentity ();
@@ -96,14 +95,12 @@ void CameraDenseTracker::reset (const sensor_msgs::CameraInfo::ConstPtr& camera_
     // IntrinsicMatrix intrinsics =
     // IntrinsicMatrix::create(camera_info_msg->K[0], camera_info_msg->K[4],
     // camera_info_msg->K[2], camera_info_msg->K[5]);
-    IntrinsicMatrix intrinsics = IntrinsicMatrix::create (camera_info_msg->P[0],
-                                                          camera_info_msg->P[5],
-                                                          camera_info_msg->P[2],
-                                                          camera_info_msg->P[6]);
+    IntrinsicMatrix intrinsics =
+    IntrinsicMatrix::create (camera_info_msg->P[0], camera_info_msg->P[5],
+                             camera_info_msg->P[2], camera_info_msg->P[6]);
 
     camera.reset (new dvo::core::RgbdCameraPyramid (camera_info_msg->width,
-                                                    camera_info_msg->height,
-                                                    intrinsics));
+                                                    camera_info_msg->height, intrinsics));
     camera->build (tracker_cfg.getNumLevels ());
 
     tracker.reset (new DenseTracker (tracker_cfg));
@@ -197,8 +194,7 @@ void CameraDenseTracker::handlePose (const geometry_msgs::PoseWithCovarianceStam
     tf::transformTFToEigen (tmp, latest_absolute_transform_);
 
     if (!use_dense_tracking_estimate_)
-        publishPose (pose->header,
-                     latest_absolute_transform_,
+        publishPose (pose->header, latest_absolute_transform_,
                      "baselink_estimate");
 }
 
@@ -298,8 +294,7 @@ void CameraDenseTracker::handleImages (const sensor_msgs::Image::ConstPtr& rgb_i
 
         // std::cerr << covariance << std::endl << std::endl;
 
-        vis_->trajectory ("estimate")->color (dvo::visualization::Color::red ()).add (
-        accumulated_transform);
+        vis_->trajectory ("estimate")->color (dvo::visualization::Color::red ()).add (accumulated_transform);
 
         vis_->camera ("current")
         ->color (dvo::visualization::Color::red ())
@@ -313,16 +308,23 @@ void CameraDenseTracker::handleImages (const sensor_msgs::Image::ConstPtr& rgb_i
         ROS_WARN ("fail");
     }
 
-    publishTransform (h, accumulated_transform * from_baselink_to_asus.inverse (), "base_link_estimate");
+    publishTransform (h, accumulated_transform * from_baselink_to_asus.inverse (),
+                      "base_link_estimate");
     //  publishTransform(rgb_image_msg->header, first_transform.inverse() *
     //  accumulated_transform, "asus_estimate");
 
     if (use_dense_tracking_estimate_)
     {
-        publishPose (h, accumulated_transform * from_baselink_to_asus.inverse (), "baselink_estimate");
+        publishPose (h, accumulated_transform * from_baselink_to_asus.inverse (),
+                     "baselink_estimate");
     }
 
     sw_callback.stopAndPrint ();
+}
+
+void CameraDenseTracker::handleImages (const sensor_msgs::Image::ConstPtr& rgb_image_msg,
+                                       const sensor_msgs::Image::ConstPtr& depth_image_msg)
+{
 }
 
 void CameraDenseTracker::publishTransform (const std_msgs::Header& header,

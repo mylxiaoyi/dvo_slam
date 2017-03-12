@@ -85,4 +85,5 @@ add_executable(camera_keyframe_tracker
 
 target_link_libraries(camera_keyframe_tracker
   ${PROJECT_NAME}
+  glog
 )

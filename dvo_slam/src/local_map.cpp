@@ -32,6 +32,8 @@
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/edge_se3_offset.h>
 
+#include <glog/logging.h>
+
 namespace dvo_slam
 {
 
@@ -95,6 +97,7 @@ struct LocalMapImpl
     frame_vertex->setId(max_vertex_id_++);
     frame_vertex->setUserData(new Timestamped(timestamp));
 
+    LOG_ASSERT(frame_vertex->id() >= 0);
     graph_.addVertex(frame_vertex);
 
     return frame_vertex;

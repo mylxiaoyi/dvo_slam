@@ -25,14 +25,14 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
 
-#include <ros/ros.h>
 #include <ros/console.h>
+#include <ros/ros.h>
 
 #include <tf/transform_listener.h>
 
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/CameraInfo.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/Image.h>
 
 #include <image_transport/image_transport.h>
 
@@ -40,13 +40,13 @@
 
 #include <dynamic_reconfigure/server.h>
 
-#include <dvo_ros/camera_base.h>
 #include <dvo_ros/CameraDenseTrackerConfig.h>
+#include <dvo_ros/camera_base.h>
 #include <dvo_ros/visualization/ros_camera_trajectory_visualizer.h>
 
-#include <dvo/dense_tracking.h>
 #include <dvo/core/intrinsic_matrix.h>
 #include <dvo/core/rgbd_image.h>
+#include <dvo/dense_tracking.h>
 
 #include <dvo_slam/keyframe_tracker.h>
 
@@ -86,7 +86,9 @@ private:
     boost::mutex tracker_mutex_;
 
     bool hasChanged (const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
+    bool hasChanged (const cv::Mat &img);
     void reset (const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
+    void reset (const cv::Mat &img);
 
     void publishTransform (const std_msgs::Header& header,
                            const Eigen::Affine3d& transform,
@@ -103,6 +105,9 @@ public:
                   const sensor_msgs::Image::ConstPtr& depth_image_msg,
                   const sensor_msgs::CameraInfo::ConstPtr& rgb_camera_info_msg,
                   const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg);
+
+    virtual void handleImages (const sensor_msgs::ImageConstPtr& rgb_image_msg,
+                               const sensor_msgs::ImageConstPtr& depth_image_msg);
 
     void handleTrackerConfig (dvo_ros::CameraDenseTrackerConfig& config, uint32_t level);
     void handleSlamConfig (dvo_slam::KeyframeSlamConfig& config, uint32_t level);

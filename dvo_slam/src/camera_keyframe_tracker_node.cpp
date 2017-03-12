@@ -24,8 +24,14 @@
 
 #include <dvo_slam/camera_keyframe_tracking.h>
 
+#include <glog/logging.h>
+
 int main (int argc, char** argv)
 {
+    google::InitGoogleLogging("camera_keyframe_tracker");
+    FLAGS_alsologtostderr = true;
+    FLAGS_colorlogtostderr = true;
+
     ros::init (argc, argv, "camera_keyframe_tracker");
 
     ros::NodeHandle nh;

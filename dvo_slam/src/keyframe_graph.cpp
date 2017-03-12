@@ -63,6 +63,8 @@
 #include <interactive_markers/interactive_marker_server.h>
 #include <visualization_msgs/InteractiveMarker.h>
 
+#include <glog/logging.h>
+
 using namespace dvo_slam::constraints;
 
 namespace dvo_slam
@@ -130,8 +132,8 @@ public:
     optimization_thread_shutdown_(false),
     optimization_thread_(boost::bind(&KeyframeGraphImpl::execOptimization, this)),
     next_keyframe_id_(1),
-    next_odometry_vertex_id_(-1),
-    next_odometry_edge_id_(-1),
+    next_odometry_vertex_id_(1),
+    next_odometry_edge_id_(1),
     validator_pool_(boost::bind(&KeyframeGraphImpl::createConstraintProposalValidator, this))
   {
     // g2o setup
@@ -729,9 +731,12 @@ private:
       en->setInformation(e->information());
       en->resize(e->vertices().size());
       int cnt = 0;
+      LOG(INFO) << "e->vertices.size = " << e->vertices().size();
       for (std::vector<g2o::HyperGraph::Vertex*>::const_iterator it = e->vertices().begin(); it != e->vertices().end(); ++it) {
         g2o::OptimizableGraph::Vertex* v = (g2o::OptimizableGraph::Vertex*) keyframegraph_.vertex((*it)->id());
+        LOG_ASSERT(v!=NULL) << "id = " << (*it)->id();
         assert(v);
+        LOG(INFO) << "id = " << e->id() << ", cnt = " << cnt << ", vertices.size = " << e->vertices().size();
         en->setVertex(cnt++, v);
       }
       keyframegraph_.addEdge(en);
@@ -740,12 +745,29 @@ private:
 
   KeyframePtr insertNewKeyframe(const LocalMap::Ptr& m)
   {
+      LOG(INFO) << "hello from insertNewKeyframe and empty = " << keyframes_.empty();
     // update keyframe pose, because its probably different from the one, which was used during local map initialization
     if(!keyframes_.empty())
     {
       g2o::VertexSE3* last_kv = (g2o::VertexSE3*) keyframegraph_.vertex(next_keyframe_id_ - 1);
-      g2o::OptimizableGraph::EdgeSet::iterator e = std::find_if(last_kv->edges().begin(), last_kv->edges().end(), FindEdge(next_keyframe_id_ - 1, next_odometry_vertex_id_));
+      g2o::OptimizableGraph::EdgeSet::iterator e = std::find_if(last_kv->edges().begin(), last_kv->edges().end(), FindEdge(next_keyframe_id_ - 1, next_odometry_vertex_id_-1));
+      LOG(INFO) << "last_kv->edges() = " << last_kv->edges().size()
+                << ", next_keyframe_id_ = " << next_keyframe_id_
+                << ", next_odometry_vertex_id_ = "<< next_odometry_vertex_id_;
 
+      for (auto it = last_kv->edges().begin(); it != last_kv->edges().end(); it++)
+      {
+          if ((*it)->vertices().size() == 2)
+          {
+              LOG(INFO) << "id1 = " << (*it)->vertex(0)->id()
+                        << ", id2 = " << (*it)->vertex(1)->id();
+          }
+          else
+              LOG(INFO) << "it->vertices.size = " << (*it)->vertices().size();
+      }
+
+
+      LOG_ASSERT(e != last_kv->edges().end()) << ", keyframes_.size = " << keyframes_.size();
       assert(e != last_kv->edges().end());
 
       g2o::EdgeSE3* e_se3 = (g2o::EdgeSE3*)(*e);
@@ -757,17 +779,27 @@ private:
     g2o::SparseOptimizer &g = m->getGraph();
 
     int max_id = g.vertices().size();
+    LOG(INFO) << "max_id = " << max_id;
 
     g2o::OptimizableGraph::VertexIDMap vertices = g.vertices();
+    LOG(INFO) <<"vertices.size = " << vertices.size();
+    LOG(INFO) << "next_odometry_vertex_id_ = " << next_odometry_vertex_id_;
+    LOG(INFO) << "next_odometry_edge_id_ = " << next_odometry_edge_id_;
+    int my_count = 0;
     for(g2o::OptimizableGraph::VertexIDMap::iterator v_it = vertices.begin(); v_it != vertices.end(); ++v_it)
     {
-      g.changeId(v_it->second, next_odometry_vertex_id_ - (v_it->second->id() - 1));
+        LOG(INFO) << "v_it->second->id = " << v_it->second->id();
+        my_count++;
+        if (v_it->second->id() == 0)
+            LOG(WARNING) << "id = 0";
+      g.changeId(v_it->second, next_odometry_vertex_id_ + (v_it->second->id() - 1));
     }
+    LOG(INFO) << "my_count = " << my_count;
 
     for(g2o::OptimizableGraph::EdgeSet::iterator e_it = g.edges().begin(); e_it != g.edges().end(); ++e_it)
     {
       g2o::EdgeSE3* e = (g2o::EdgeSE3*) (*e_it);
-      e->setId(next_odometry_edge_id_--);
+      e->setId(next_odometry_edge_id_++);
       e->setLevel(cfg_.OptimizationUseDenseGraph ? 0 : 2);
     }
 
@@ -777,10 +809,23 @@ private:
     g2o::VertexSE3* kv = (g2o::VertexSE3*) keyframegraph_.vertex(next_odometry_vertex_id_);
     assert(kv != 0);
     assert(keyframegraph_.changeId(kv, next_keyframe_id_));
+    if (keyframes_.empty())
+    {
+        LOG(INFO) << "keyframes_ is empty";
+        LOG_ASSERT(kv != NULL);
+        LOG(WARNING) << "kv->id = " << kv->id();
+    }
+    else
+    {
+        LOG(INFO) << "keyframes_ is not empty";
+        LOG_ASSERT(kv != NULL);
+        LOG(WARNING) << "kv->id = " << kv->id();
+    }
 
     if(!keyframes_.empty())
     {
-      g2o::VertexSE3* kv = (g2o::VertexSE3*) keyframegraph_.vertex(next_keyframe_id_);
+      g2o::VertexSE3* kv = (g2o::VertexSE3*) keyframegraph_.vertex(next_keyframe_id_-1);
+      LOG(INFO) << "net_keyframe_id_ - 1 = " << next_keyframe_id_ - 1 << ", kv.id = " << kv->id();
 
       // find the odometry edge, which connects the old keyframe vertex with the new keyframe vertex
       g2o::OptimizableGraph::EdgeSet::iterator ke = std::find_if(kv->edges().begin(), kv->edges().end(), FindEdge(next_keyframe_id_ - 1, next_keyframe_id_));
@@ -790,6 +835,7 @@ private:
       // promote odometry edge to keyframe edge
       g2o::OptimizableGraph::Edge* e = (g2o::OptimizableGraph::Edge*) (*ke);
       e->setId(combine(next_keyframe_id_ - 1, next_keyframe_id_));
+      LOG(INFO) << "next_keyframe_id_ = " << next_keyframe_id_ << ", e->id = " << e->id();
       e->setLevel(0);
     }
     else
@@ -810,7 +856,7 @@ private:
     keyframes_.push_back(keyframe);
 
     // increment ids
-    next_odometry_vertex_id_ -= max_id - 1;
+    next_odometry_vertex_id_ += max_id;
     next_keyframe_id_ += 1;
 
     return keyframe;
