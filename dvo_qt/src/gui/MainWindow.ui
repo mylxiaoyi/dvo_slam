@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="actionSave_Map"/>
+    <addaction name="action_Load_Map"/>
+    <addaction name="actionSave_Octomap"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave_Trajectory"/>
+    <addaction name="separator"/>
+    <addaction name="actionE_xit"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>&amp;View</string>
+    </property>
+   </widget>
+   <widget class="QMenu" name="menu_Help">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuView"/>
+   <addaction name="menu_Help"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSave_Map">
+   <property name="text">
+    <string>&amp;Save Map</string>
+   </property>
+  </action>
+  <action name="action_Load_Map">
+   <property name="text">
+    <string>&amp;Load Map</string>
+   </property>
+  </action>
+  <action name="actionE_xit">
+   <property name="text">
+    <string>&amp;Exit</string>
+   </property>
+  </action>
+  <action name="actionSave_Octomap">
+   <property name="text">
+    <string>Save &amp;Octomap</string>
+   </property>
+  </action>
+  <action name="actionSave_Trajectory">
+   <property name="text">
+    <string>Save Trajectory</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

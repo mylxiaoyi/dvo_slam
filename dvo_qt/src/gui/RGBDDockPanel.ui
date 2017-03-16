@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RGBDDockPanel</class>
+ <widget class="QDockWidget" name="RGBDDockPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>1082</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Doc&amp;kWidget</string>
+  </property>
+  <widget class="QWidget" name="dockWidgetContents">
+   <layout class="QVBoxLayout" name="verticalLayout_6">
+    <item>
+     <widget class="QGroupBox" name="groupBox">
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>260</height>
+       </size>
+      </property>
+      <property name="title">
+       <string>Draw Control</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <widget class="QCheckBox" name="checkBox_VolumeShifting">
+           <property name="text">
+            <string>Volume Shifting</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_LimitedFrontend">
+           <property name="text">
+            <string>Limit Frontend</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_FollowPose">
+           <property name="text">
+            <string>Follow Pose</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_DrawTSDF">
+           <property name="text">
+            <string>Draw TSDF</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_DrawCloud">
+           <property name="text">
+            <string>Draw Cloud</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_DrawMesh">
+           <property name="text">
+            <string>Draw Mesh</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkBox_DrawMeshNormals">
+           <property name="text">
+            <string>Draw Mesh Normals</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="groupBox_2">
+      <property name="title">
+       <string>SLAM Control</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_4">
+       <item>
+        <widget class="QPushButton" name="startButton">
+         <property name="text">
+          <string>Start</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="completeButton">
+         <property name="text">
+          <string>Complete</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveButton">
+         <property name="text">
+          <string>Save</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="resetButton">
+         <property name="text">
+          <string>Reset</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="groupBox_3">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>250</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="title">
+       <string>Sensor Type</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+       <item>
+        <widget class="QRadioButton" name="radioButton_OpenNI2">
+         <property name="text">
+          <string>Asus &amp;Xtion (OpenNI2)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_RealSense">
+         <property name="text">
+          <string>I&amp;ntel ReslSense</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_GuidanceStereo">
+         <property name="text">
+          <string>&amp;Guidance (Stereo)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_GuidanceMono">
+         <property name="text">
+          <string>Guidance (&amp;Mono)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_OpenNI2_ROS">
+         <property name="text">
+          <string>ROS Asus Xtion (OpenNI&amp;2)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_RealSense_ROS">
+         <property name="text">
+          <string>ROS I&amp;ntel ReslSense</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_GuidanceStereo_ROS">
+         <property name="text">
+          <string>ROS &amp;Guidance (Stereo)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_GuidanceMono_ROS">
+         <property name="text">
+          <string>ROS Guidance (&amp;Mono)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="radioButton_Mono_ROS">
+         <property name="text">
+          <string>ROS Mono</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="groupBox_4">
+      <property name="title">
+       <string>Map Control</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_5">
+       <item>
+        <widget class="QPushButton" name="saveMapButton">
+         <property name="text">
+          <string>Save Map</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="loadMapButton">
+         <property name="text">
+          <string>Load Map</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveOctomapButton">
+         <property name="text">
+          <string>Save Octomap</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="savePCDPointCloud">
+         <property name="text">
+          <string>Save PCD PointCloud</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveKeyFrameTrajectory">
+         <property name="text">
+          <string>Save KeyFrame Trajectory</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveTUMCameraTrajectory">
+         <property name="text">
+          <string>Save TUM Camera Trajectory</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveRelocalizationKeyFrameTrajectory">
+         <property name="text">
+          <string>Save Relocalization KeyFrame Trajectory</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="timeReportBtn">
+         <property name="text">
+          <string>Time Report</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <spacer name="verticalSpacer">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>40</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
