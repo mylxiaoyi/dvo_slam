@@ -4,7 +4,7 @@
 
 TEMPLATE = app
 TARGET = dvo_slam
-INCLUDEPATH += . /home/mylxiaoyi/source/ros_catkin.kinetic/install_isolated/include \
+INCLUDEPATH += . /home/mylxiaoyi/source/ros_catkin_ws.lunar/install_isolated/include \
                dvo_benchmark/include dvo_core/include dvo_ros/include dvo_slam/include
 
 # Input

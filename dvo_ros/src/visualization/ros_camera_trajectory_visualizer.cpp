@@ -408,7 +408,8 @@ struct RosCameraTrajectoryVisualizerImpl
   RosCameraTrajectoryVisualizerImpl(ros::NodeHandle& nh) :
     nh_(nh),
     it_(nh),
-    marker_server_(nh.getNamespace())
+//    marker_server_(nh.getNamespace())
+    marker_server_("dvo_vis")
   {
     image_topic_ = it_.advertise("image", 1, true);
     point_cloud_topic_ = nh_.advertise<AsyncPointCloudBuilder::PointCloud>("cloud", 1, true);
