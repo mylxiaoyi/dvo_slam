@@ -338,7 +338,7 @@ void CameraKeyframeTracker::handleImages(
     const sensor_msgs::Image::ConstPtr& depth_image_msg
 )
 {
-  ROS_INFO_STREAM("hello from handleImages");
+//  ROS_INFO_STREAM("hello from handleImages");
   static stopwatch sw_callback("callback");
   sw_callback.start();
 
