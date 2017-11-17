@@ -29,6 +29,8 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     ros::NodeHandle nh_private("~");
 
+    ROS_INFO_STREAM("construct dense_tracker");
+
     dvo_slam::CameraKeyframeTracker dense_tracker(nh, nh_private);
 
     ROS_INFO("started camera_keyframe_tracker...");

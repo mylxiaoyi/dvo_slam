@@ -51,8 +51,9 @@
 
 namespace dvo_slam
 {
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MyRGBDWithCameraInfoPolicy;
 
-class CameraKeyframeTracker : public dvo_ros::CameraBase
+class CameraKeyframeTracker /*: public dvo_ros::CameraBase*/
 {
 private:
   typedef dynamic_reconfigure::Server<dvo_ros::CameraDenseTrackerConfig> TrackerReconfigureServer;
@@ -84,6 +85,13 @@ private:
 
   boost::mutex tracker_mutex_;
 
+  message_filters::Subscriber<sensor_msgs::Image>* rgb_image_subscriber_;
+  message_filters::Subscriber<sensor_msgs::Image>* depth_image_subscriber_;
+  message_filters::Subscriber<sensor_msgs::CameraInfo>* rgb_camera_info_subscriber_;
+  message_filters::Subscriber<sensor_msgs::CameraInfo>* depth_camera_info_subscriber_;
+
+  message_filters::Synchronizer<MyRGBDWithCameraInfoPolicy>* my_synchronizer_;
+
   bool hasChanged(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
   bool hasChanged(const cv::Mat &img);
   void reset(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg);
@@ -92,6 +100,17 @@ private:
   void publishTransform(const std_msgs::Header& header, const Eigen::Affine3d& transform, const std::string frame);
 
   void onMapChanged(dvo_slam::KeyframeGraph& map);
+
+  bool isSynchronizedImageStreamRunning ();
+
+  void startSynchronizedImageStream ();
+  void stopSynchronizedImageStream ();
+
+  message_filters::Connection connection;
+  bool connected;
+
+  ros::NodeHandle nh_;
+
 public:
   CameraKeyframeTracker(ros::NodeHandle& nh, ros::NodeHandle& nh_private);
   virtual ~CameraKeyframeTracker();

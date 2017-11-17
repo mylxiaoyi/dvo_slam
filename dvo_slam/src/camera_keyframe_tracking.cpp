@@ -51,12 +51,13 @@ using namespace dvo::core;
 using namespace dvo::util;
 
 CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh, ros::NodeHandle& nh_private) :
-  CameraBase(nh, nh_private),
+//  CameraBase(nh, nh_private),
   tracker_reconfigure_server_(ros::NodeHandle(nh_private, "tracking")),
   slam_reconfigure_server_(ros::NodeHandle(nh_private, "slam")),
   tracker_cfg(dvo::DenseTracker::getDefaultConfig()),
-  vis_(new dvo_ros::visualization::RosCameraTrajectoryVisualizer(nh_)),
-  graph_vis_(new dvo_slam::visualization::GraphVisualizer(*vis_))
+  vis_(new dvo_ros::visualization::RosCameraTrajectoryVisualizer(nh)),
+  graph_vis_(new dvo_slam::visualization::GraphVisualizer(*vis_)),
+  connected(false), nh_(nh)
 {
   ROS_INFO("CameraDenseTracker::ctor(...)");
 
@@ -64,12 +65,24 @@ CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh, ros::NodeHandl
   graph_publisher = nh.advertise<dvo_slam::PoseStampedArray>("graph", 1);
 
   TrackerReconfigureServer::CallbackType tracker_reconfigure_server_callback = boost::bind(&CameraKeyframeTracker::handleTrackerConfig, this, _1, _2);
-  tracker_reconfigure_server_.setCallback(tracker_reconfigure_server_callback);
+//  tracker_reconfigure_server_.setCallback(tracker_reconfigure_server_callback);
 
   SlamReconfigureServer::CallbackType slam_reconfigure_server_callback = boost::bind(&CameraKeyframeTracker::handleSlamConfig, this, _1, _2);
-  slam_reconfigure_server_.setCallback(slam_reconfigure_server_callback);
+//  slam_reconfigure_server_.setCallback(slam_reconfigure_server_callback);
 
   accumulated_transform.setIdentity();
+
+  rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+      nh, "camera/rgb/image_raw", 1);
+  depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+      nh, "camera/depth/image_raw", 1);
+
+  my_synchronizer_ =
+      new message_filters::Synchronizer<MyRGBDWithCameraInfoPolicy>(
+          MyRGBDWithCameraInfoPolicy(10), *rgb_image_subscriber_,
+          *depth_image_subscriber_);
+
+  startSynchronizedImageStream();
 }
 
 CameraKeyframeTracker::~CameraKeyframeTracker()
@@ -325,7 +338,7 @@ void CameraKeyframeTracker::handleImages(
     const sensor_msgs::Image::ConstPtr& depth_image_msg
 )
 {
-    ROS_INFO_STREAM("hello from handleImages");
+  ROS_INFO_STREAM("hello from handleImages");
   static stopwatch sw_callback("callback");
   sw_callback.start();
 
@@ -394,6 +407,11 @@ void CameraKeyframeTracker::handleImages(
     accumulated_transform.setIdentity();
     keyframe_tracker->init(accumulated_transform);
 
+    vis_->camera("first")
+        ->color(dvo::visualization::Color::blue())
+        .update(current->level(0), accumulated_transform)
+        .show();
+
     return;
   }
 
@@ -413,7 +431,8 @@ void CameraKeyframeTracker::handleImages(
   vis_->camera("current")->
       color(dvo::visualization::Color::red()).
       update(current->level(0), accumulated_transform).
-      show(dvo::visualization::CameraVisualizer::ShowCamera);
+//      show(dvo::visualization::CameraVisualizer::ShowCamera);
+      show();
 
   publishTransform(h, accumulated_transform, "base_link_estimate");
 
@@ -440,6 +459,31 @@ void CameraKeyframeTracker::publishTransform(const std_msgs::Header& header, con
   pose_msg.header.stamp = header.stamp;
 
   pose_publisher.publish(pose_msg);
+}
+
+void CameraKeyframeTracker::startSynchronizedImageStream() {
+  if (!connected) {
+    //        connection = synchronizer_->registerCallback (
+    //        boost::bind (&CameraBase::handleImages, this, _1, _2, _3,
+    //        _4));
+    //        connected = true;
+
+    connection = my_synchronizer_->registerCallback(
+        boost::bind(&CameraKeyframeTracker::handleImages, this, _1, _2));
+    connected = true;
+    ROS_INFO_STREAM("image stream started");
+  }
+}
+
+void CameraKeyframeTracker::stopSynchronizedImageStream() {
+  if (connected) {
+    connection.disconnect();
+    connected = false;
+  }
+}
+
+bool CameraKeyframeTracker::isSynchronizedImageStreamRunning() {
+  return connected;
 }
 
 } /* namespace dvo_slam */
