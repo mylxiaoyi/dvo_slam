@@ -75,10 +75,19 @@ public:
   {
     if(file_stream_.good() && !file_stream_.eof())
     {
-      file_stream_ >> entry_;
-      hasEntry_ = true;
+      std::string line;
+      std::getline(file_stream_, line);
+      if (!line.empty())
+      {
+        std::stringstream ss(line);
+        ss >> entry_;
+        hasEntry_ = true;
+        return true;
+      }
+//      file_stream_ >> entry_;
+//      hasEntry_ = true;
 
-      return true;
+//      return true;
     }
 
     return false;

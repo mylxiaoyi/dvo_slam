@@ -453,7 +453,7 @@ private:
     // find possible constraints
     constraint_search_->findPossibleConstraints(keyframes_, keyframe, constraint_candidates);
     sw_constraint.stopAndPrint();
-    //std::cerr << "constraints to validate: " << constraint_candidates.size() << std::endl;
+//    std::cerr << "keyframes.size = " << keyframes_.size() << " constraints to validate: " << constraint_candidates.size() << std::endl;
 
     sw_validation.start();
     // validate constraints

@@ -1,5 +1,10 @@
 <launch>
+  <!--
   <arg name="dataset" default="$(env PWD)" />
+  <arg name="rgbdpair_file" default="$(arg dataset)/assoc.txt" />
+  <arg name="groundtruth_file" default="$(arg dataset)/groundtruth.txt" />-->
+
+  <arg name="dataset" default="/media/datadisk/dataset/tum_rgbd/all_tgzs/rgbd_dataset_freiburg1_xyz/" />
   <arg name="rgbdpair_file" default="$(arg dataset)/assoc.txt" />
   <arg name="groundtruth_file" default="$(arg dataset)/groundtruth.txt" />
 

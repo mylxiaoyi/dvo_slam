@@ -567,5 +567,7 @@ int main(int argc, char **argv)
     benchmark.run();
   }
 
+  ROS_INFO_STREAM("return from main");
+
   return 0;
 }
