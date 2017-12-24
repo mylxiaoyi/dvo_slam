@@ -141,21 +141,22 @@ int MapPoint::GetIndexInKeyFrame(boost::shared_ptr<Keyframe> pKF) {
 void MapPoint::EraseObservation(boost::shared_ptr<Keyframe> pKF) {
   bool bBad = false;
   {
-//    unique_lock<mutex> lock(mMutexFeatures);
+    //    unique_lock<mutex> lock(mMutexFeatures);
     if (mObservations.count(pKF)) {
       int idx = mObservations[pKF];
       nObs -= 2;
 
       mObservations.erase(pKF);
 
-      if (ref_ == pKF) ref_ = mObservations.begin()->first;
+      if (ref_ == pKF && mObservations.size() > 0)
+        ref_ = mObservations.begin()->first;
 
       // If only 2 observations or less, discard point
       if (nObs <= 2) bBad = true;
     }
   }
 
-//  if (bBad) SetBadFlag();
+  //  if (bBad) SetBadFlag();
   mbBad = bBad;
 }
 }

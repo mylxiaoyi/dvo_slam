@@ -494,7 +494,7 @@ void Optimizer::LocalBundleAdjustment(boost::shared_ptr<Keyframe> pKF,
        lit != lend; lit++) {
     boost::shared_ptr<Keyframe> pKFi = *lit;
     g2o::VertexSE3Expmap* vSE3 = new g2o::VertexSE3Expmap();
-    vSE3->setEstimate(toSE3Quat(pKFi->pose()));
+    vSE3->setEstimate(toSE3Quat(pKFi->pose().inverse()));
     vSE3->setId(pKFi->id());
     vSE3->setFixed(pKFi->id() == 1);
     optimizer.addVertex(vSE3);
@@ -508,7 +508,7 @@ void Optimizer::LocalBundleAdjustment(boost::shared_ptr<Keyframe> pKF,
        lit != lend; lit++) {
     boost::shared_ptr<Keyframe> pKFi = *lit;
     g2o::VertexSE3Expmap* vSE3 = new g2o::VertexSE3Expmap();
-    vSE3->setEstimate(toSE3Quat(pKFi->pose()));
+    vSE3->setEstimate(toSE3Quat(pKFi->pose().inverse()));
     vSE3->setId(pKFi->id());
     vSE3->setFixed(true);
     optimizer.addVertex(vSE3);
@@ -665,7 +665,7 @@ void Optimizer::LocalBundleAdjustment(boost::shared_ptr<Keyframe> pKF,
     g2o::VertexSE3Expmap* vSE3 =
         static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(pKF->id()));
     g2o::SE3Quat SE3quat = vSE3->estimate();
-    pKF->pose(toAffine(SE3quat));
+    pKF->pose(toAffine(SE3quat).inverse());
   }
 
   // Points

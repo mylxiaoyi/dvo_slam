@@ -494,8 +494,8 @@ class KeyframeGraphImpl {
       // Triangulate new MapPoints
       CreateNewMapPoints(keyframe);
 
-      //      bool mbAbortBA = false;
-      //      Optimizer::LocalBundleAdjustment (keyframe, &mbAbortBA, mpMap);
+      bool mbAbortBA = false;
+      Optimizer::LocalBundleAdjustment(keyframe, &mbAbortBA, mpMap);
     }
 
     map_changed_(*me_);
@@ -548,9 +548,8 @@ class KeyframeGraphImpl {
     Eigen::Matrix<double, 3, 3> Rcw1 = pose1_cw.rotation();
     Eigen::Vector3d tcw1 = pose1_cw.translation();
     Eigen::Matrix<double, 3, 4> Tcw1;
-    Tcw1 << Rcw1(0, 0), Rcw1(0, 1), Rcw1(0, 2), tcw1(0),
-            Rcw1(1, 0), Rcw1(1, 1), Rcw1(1, 2), tcw1(1),
-            Rcw1(2, 0), Rcw1(2, 1), Rcw1(2, 2), tcw1(2);
+    Tcw1 << Rcw1(0, 0), Rcw1(0, 1), Rcw1(0, 2), tcw1(0), Rcw1(1, 0), Rcw1(1, 1),
+        Rcw1(1, 2), tcw1(1), Rcw1(2, 0), Rcw1(2, 1), Rcw1(2, 2), tcw1(2);
 
     const float& fx1 = keyframe->fx;
     const float& fy1 = keyframe->fy;
@@ -640,16 +639,15 @@ class KeyframeGraphImpl {
         Eigen::Vector3d ray2 = Rwc2 * xn2;
         float tmp1 = ray1.transpose() * ray2;
         float tmp2 = ray1.norm() * ray2.norm();
-        const double cosParallaxRays =
-            (tmp1) / (tmp2);
+        const double cosParallaxRays = (tmp1) / (tmp2);
 
         float cosParallaxStereo = cosParallaxRays + 1;
         float cosParallaxStereo1 = cosParallaxStereo;
         float cosParallaxStereo2 = cosParallaxStereo;
 
         if (bStereo1)
-          cosParallaxStereo1 = cos(2 * atan2(keyframe->mb / 2,
-                                             keyframe->mvDepth[idx1]));
+          cosParallaxStereo1 =
+              cos(2 * atan2(keyframe->mb / 2, keyframe->mvDepth[idx1]));
         else if (bStereo2)
           cosParallaxStereo2 =
               cos(2 * atan2(pKF2->mb / 2, pKF2->mvDepth[idx2]));
@@ -660,11 +658,11 @@ class KeyframeGraphImpl {
         if (cosParallaxRays < cosParallaxStereo && cosParallaxRays > 0 &&
             (bStereo1 || bStereo2 || cosParallaxRays < 0.9998)) {
           // Linear Triangulation Method
-//          cv::Mat A(4, 4, CV_32F);
-//          A.row(0) = xn1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
-//          A.row(1) = xn1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
-//          A.row(2) = xn2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
-//          A.row(3) = xn2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
+          //          cv::Mat A(4, 4, CV_32F);
+          //          A.row(0) = xn1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
+          //          A.row(1) = xn1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
+          //          A.row(2) = xn2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
+          //          A.row(3) = xn2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
 
           Eigen::Matrix<double, 4, 4> A;
           A.row(0) = xn1[0] * Tcw1.row(2) - Tcw1.row(0);
@@ -672,23 +670,26 @@ class KeyframeGraphImpl {
           A.row(2) = xn2[0] * Tcw2.row(2) - Tcw2.row(0);
           A.row(3) = xn2[1] * Tcw2.row(2) - Tcw2.row(1);
 
-//          cv::Mat w, u, vt;
-//          cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
-          Eigen::JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+          //          cv::Mat w, u, vt;
+          //          cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A |
+          //          cv::SVD::FULL_UV);
+          Eigen::JacobiSVD<Eigen::MatrixXd> svd(
+              A, Eigen::ComputeThinU | Eigen::ComputeThinV);
           Eigen::Matrix<double, 4, 4> v = svd.matrixV();
 
           Eigen::Vector4d x3D_tmp = v.col(3);
 
           if (x3D_tmp[3] == 0) continue;
 
-          x3D = Eigen::Vector3d(x3D_tmp[0], x3D_tmp[1], x3D_tmp[2]) / x3D_tmp[3];
+          x3D =
+              Eigen::Vector3d(x3D_tmp[0], x3D_tmp[1], x3D_tmp[2]) / x3D_tmp[3];
 
-//          x3D = vt.row(3).t();
+          //          x3D = vt.row(3).t();
 
-//          if (x3D.at<float>(3) == 0) continue;
+          //          if (x3D.at<float>(3) == 0) continue;
 
-//          // Euclidean coordinates
-//          x3D = x3D.rowRange(0, 3) / x3D.at<float>(3);
+          //          // Euclidean coordinates
+          //          x3D = x3D.rowRange(0, 3) / x3D.at<float>(3);
         } else if (bStereo1 && cosParallaxStereo1 < cosParallaxStereo2) {
           x3D = keyframe->UnprojectStereo(idx1);
         } else if (bStereo2 && cosParallaxStereo2 < cosParallaxStereo1) {
@@ -696,7 +697,7 @@ class KeyframeGraphImpl {
         } else
           continue;  // No stereo and very low parallax
 
-//        cv::Mat x3Dt = x3D.t();
+        //        cv::Mat x3Dt = x3D.t();
 
         // Check triangulation in front of cameras
         float z1 = Rcw1.row(2) * x3D + tcw1[2];
@@ -706,8 +707,7 @@ class KeyframeGraphImpl {
         if (z2 <= 0) continue;
 
         // Check reprojection error in first keyframe
-        const float& sigmaSquare1 =
-            keyframe->mvLevelSigma2[kp1.octave];
+        const float& sigmaSquare1 = keyframe->mvLevelSigma2[kp1.octave];
         const float x1 = Rcw1.row(0) * x3D + tcw1[0];
         const float y1 = Rcw1.row(1) * x3D + tcw1[1];
         const float invz1 = 1.0 / z1;
@@ -754,11 +754,11 @@ class KeyframeGraphImpl {
         }
 
         // Check scale consistency
-//        cv::Mat normal1 = x3D - Ow1;
-//        float dist1 = cv::norm(normal1);
+        //        cv::Mat normal1 = x3D - Ow1;
+        //        float dist1 = cv::norm(normal1);
 
-//        cv::Mat normal2 = x3D - Ow2;
-//        float dist2 = cv::norm(normal2);
+        //        cv::Mat normal2 = x3D - Ow2;
+        //        float dist2 = cv::norm(normal2);
         Eigen::Vector3d normal1 = x3D - Ow1;
         float dist1 = normal1.norm();
 
