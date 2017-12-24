@@ -4,8 +4,9 @@
 
 TEMPLATE = app
 TARGET = dvo_slam
-INCLUDEPATH += . /home/mylxiaoyi/source/ros_catkin_ws.lunar/install_isolated/include \
-               dvo_benchmark/include dvo_core/include dvo_ros/include dvo_slam/include
+INCLUDEPATH += . /home/mylxiaoyi/source/ros_catkin.lunar/install_isolated/include \
+               dvo_benchmark/include dvo_core/include dvo_ros/include dvo_slam/include\
+               /usr/include/eigen3 dvo_slam
 
 # Input
 HEADERS += dvo_benchmark/include/dvo_benchmark/file_reader.h \
@@ -468,7 +469,13 @@ HEADERS += dvo_benchmark/include/dvo_benchmark/file_reader.h \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/position.hh \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/scanner.h \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/slam_context.h \
-           g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/stack.hh
+           g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/stack.hh \
+    dvo_slam/include/dvo_slam/ORBextractor.h \
+    dvo_slam/include/dvo_slam/ORBmatcher.h \
+    dvo_slam/include/dvo_slam/Optimizer.h \
+    map.h \
+    dvo_slam/include/dvo_slam/map.h \
+    dvo_slam/include/dvo_slam/orbvocabulary.h
 FORMS += g2o/g2o/g2o/apps/g2o_viewer/base_main_window.ui \
          g2o/g2o/g2o/apps/g2o_viewer/base_properties_widget.ui \
          g2o/g2o/g2o/examples/slam2d/base_main_window.ui
@@ -760,4 +767,9 @@ SOURCES += dvo_benchmark/src/benchmark.cpp \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/driver.cpp \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/flex_scanner.cpp \
            g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/slam_context.cpp \
-           g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/test_slam_parser.cpp
+           g2o/g2o/g2o/examples/interactive_slam/slam_parser/parser/test_slam_parser.cpp \
+    dvo_slam/src/ORBextractor.cpp \
+    dvo_slam/src/ORBmatcher.cpp \
+    dvo_slam/src/mappoint.cpp \
+    dvo_slam/src/Optimizer.cpp \
+    dvo_slam/src/map.cpp

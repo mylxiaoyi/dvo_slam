@@ -256,7 +256,7 @@ public:
   RgbdImage& level(size_t idx);
 
   double timestamp() const;
-private:
+//private:
   RgbdCameraPyramid& camera_;
   std::vector<RgbdImagePtr> levels_;
 };

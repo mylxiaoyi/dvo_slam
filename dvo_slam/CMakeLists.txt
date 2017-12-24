@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 
 project(dvo_slam)
 
+SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 LIST(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules")
 
 find_package(catkin REQUIRED COMPONENTS roscpp dynamic_reconfigure dvo_core dvo_ros sensor_msgs image_transport message_filters cv_bridge visualization_msgs interactive_markers message_generation geometry_msgs)
@@ -10,7 +11,7 @@ find_package(Eigen3 REQUIRED)
 find_package(G2O REQUIRED)
 #find_package(sophus REQUIRED)
 #find_package(Boost REQUIRED thread)
-#find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(TBB REQUIRED)
 
 LIST(APPEND CMAKE_CXX_FLAGS "-std=c++11 -g -O3 -msse4 -msse4.2")
@@ -47,6 +48,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${G2O_INCLUDE_DIR}
+  ${PROJECT_SOURCE_DIR}
 )
 
 add_library(${PROJECT_NAME} 
@@ -71,6 +73,13 @@ add_library(${PROJECT_NAME}
   src/visualization/graph_visualizer.cpp
   
   src/types.cpp
+
+  src/ORBextractor.cpp
+  src/ORBmatcher.cpp
+  src/mappoint.cpp
+  src/keyframe.cpp
+  src/Optimizer.cpp
+  src/map.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -78,7 +87,10 @@ target_link_libraries(${PROJECT_NAME}
   ${G2O_SOLVER_DENSE}
   ${G2O_SOLVER_EIGEN}
   ${G2O_TYPES_SLAM3D}
+  ${G2O_TYPES_SBA}
   ${catkin_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
 )
 
 add_executable(camera_keyframe_tracker

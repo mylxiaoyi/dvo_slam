@@ -22,6 +22,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${G2O_INCLUDE_DIR}
+  ${PROJECT_SOURCE_DIR}
 )
 
 
@@ -36,6 +37,7 @@ message(STATUS ${catkin_LIBRARIES})
 target_link_libraries(benchmark
 #  vtkCommon
   ${catkin_LIBRARIES}
+  ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
 )
 
 # create output directory - just convenience for our users
