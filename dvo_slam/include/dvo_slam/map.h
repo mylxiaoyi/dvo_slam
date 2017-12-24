@@ -15,8 +15,14 @@ class Map {
   Map();
   virtual ~Map();
 
-  void AddKeyFrame (boost::shared_ptr<Keyframe> pKF);
+  static Map *instance;
+
+  void AddKeyFrame(boost::shared_ptr<Keyframe> pKF);
   void AddMapPoint(boost::shared_ptr<MapPoint> pMP);
+
+  void ReplaceMapPoint(boost::shared_ptr<MapPoint> pMP1,
+                       boost::shared_ptr<MapPoint> pMP2);
+  void EraseMapPoint(boost::shared_ptr<MapPoint> pMP);
 
  protected:
   std::set<boost::shared_ptr<MapPoint>> mspMapPoints;

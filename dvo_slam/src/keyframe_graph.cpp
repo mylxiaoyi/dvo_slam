@@ -494,6 +494,8 @@ class KeyframeGraphImpl {
       // Triangulate new MapPoints
       CreateNewMapPoints(keyframe);
 
+      SearchInNeighbors(keyframe);
+
       bool mbAbortBA = false;
       Optimizer::LocalBundleAdjustment(keyframe, &mbAbortBA, mpMap);
     }
@@ -511,7 +513,7 @@ class KeyframeGraphImpl {
         if (!pMP->isBad()) {
           if (!pMP->IsInKeyFrame(keyframe)) {
             pMP->AddObservation(keyframe, i);
-            //            pMP->UpdateNormalAndDepth();
+            pMP->UpdateNormalAndDepth();
             pMP->ComputeDistinctiveDescriptors();
           }
         }
@@ -789,13 +791,101 @@ class KeyframeGraphImpl {
 
         pMP->ComputeDistinctiveDescriptors();
 
-        //        pMP->UpdateNormalAndDepth();
+        pMP->UpdateNormalAndDepth();
 
         mpMap->AddMapPoint(pMP);
 
         nnew++;
       }
     }
+  }
+
+  void SearchInNeighbors(KeyframePtr keyframe) {
+    // Retrieve neighbor keyframes
+    int nn = 10;
+    //    if (mbMonocular) nn = 20;
+    const vector<boost::shared_ptr<Keyframe>> vpNeighKFs =
+        keyframe->GetBestCovisibilityKeyFrames(nn);
+    vector<boost::shared_ptr<Keyframe>> vpTargetKFs;
+    for (vector<boost::shared_ptr<Keyframe>>::const_iterator
+             vit = vpNeighKFs.begin(),
+             vend = vpNeighKFs.end();
+         vit != vend; vit++) {
+      boost::shared_ptr<Keyframe> pKFi = *vit;
+      if (pKFi->isBad() || pKFi->mnFuseTargetForKF == keyframe->id()) continue;
+      vpTargetKFs.push_back(pKFi);
+      pKFi->mnFuseTargetForKF = keyframe->id();
+
+      // Extend to some second neighbors
+      const vector<boost::shared_ptr<Keyframe>> vpSecondNeighKFs =
+          pKFi->GetBestCovisibilityKeyFrames(5);
+      for (vector<boost::shared_ptr<Keyframe>>::const_iterator
+               vit2 = vpSecondNeighKFs.begin(),
+               vend2 = vpSecondNeighKFs.end();
+           vit2 != vend2; vit2++) {
+        boost::shared_ptr<Keyframe> pKFi2 = *vit2;
+        if (pKFi2->isBad() || pKFi2->mnFuseTargetForKF == keyframe->id() ||
+            pKFi2->id() == keyframe->id())
+          continue;
+        vpTargetKFs.push_back(pKFi2);
+      }
+    }
+
+    // Search matches by projection from current KF in target KFs
+    ORBmatcher matcher;
+    vector<boost::shared_ptr<MapPoint>> vpMapPointMatches =
+        keyframe->GetMapPointMatches();
+    for (vector<boost::shared_ptr<Keyframe>>::iterator
+             vit = vpTargetKFs.begin(),
+             vend = vpTargetKFs.end();
+         vit != vend; vit++) {
+      boost::shared_ptr<Keyframe> pKFi = *vit;
+
+      matcher.Fuse(pKFi, vpMapPointMatches);
+    }
+
+    // Search matches by projection from target KFs in current KF
+    vector<boost::shared_ptr<MapPoint>> vpFuseCandidates;
+    vpFuseCandidates.reserve(vpTargetKFs.size() * vpMapPointMatches.size());
+
+    for (vector<boost::shared_ptr<Keyframe>>::iterator
+             vitKF = vpTargetKFs.begin(),
+             vendKF = vpTargetKFs.end();
+         vitKF != vendKF; vitKF++) {
+      boost::shared_ptr<Keyframe> pKFi = *vitKF;
+
+      vector<boost::shared_ptr<MapPoint>> vpMapPointsKFi =
+          pKFi->GetMapPointMatches();
+
+      for (vector<boost::shared_ptr<MapPoint>>::iterator
+               vitMP = vpMapPointsKFi.begin(),
+               vendMP = vpMapPointsKFi.end();
+           vitMP != vendMP; vitMP++) {
+        boost::shared_ptr<MapPoint> pMP = *vitMP;
+        if (!pMP) continue;
+        if (pMP->isBad() || pMP->mnFuseCandidateForKF == keyframe->id())
+          continue;
+        pMP->mnFuseCandidateForKF = keyframe->id();
+        vpFuseCandidates.push_back(pMP);
+      }
+    }
+
+    matcher.Fuse(keyframe, vpFuseCandidates);
+
+    // Update points
+    vpMapPointMatches = keyframe->GetMapPointMatches();
+    for (size_t i = 0, iend = vpMapPointMatches.size(); i < iend; i++) {
+      boost::shared_ptr<MapPoint> pMP = vpMapPointMatches[i];
+      if (pMP) {
+        if (!pMP->isBad()) {
+          pMP->ComputeDistinctiveDescriptors();
+          pMP->UpdateNormalAndDepth();
+        }
+      }
+    }
+
+    // Update connections in covisibility graph
+    keyframe->UpdateConnections();
   }
 
   Eigen::Matrix<double, 3, 3> ComputeF12(boost::shared_ptr<Keyframe> pKF1,

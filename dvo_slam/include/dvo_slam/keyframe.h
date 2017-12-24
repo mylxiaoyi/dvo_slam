@@ -115,6 +115,7 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   unsigned long int mnBALocalForKF;
   unsigned long int mnBAFixedForKF;
+  unsigned long int mnFuseTargetForKF;
 
   void detectFeatures();
 
@@ -126,9 +127,10 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   Eigen::Vector3d unproject(double u, double v, double d);
 
-  Eigen::Vector3d UnprojectStereo (int i);
+  Eigen::Vector3d UnprojectStereo(int i);
 
   bool isInImageBound(Eigen::Vector2d uv);
+  bool IsInImage(const float& x, const float& y);
 
   void AssignFeaturesToGrid();
 
@@ -164,12 +166,13 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   void ComputeBoW();
   std::vector<cv::Mat> toDescriptorVector(const cv::Mat& descriptor);
 
-  std::vector<boost::shared_ptr<Keyframe>> GetVectorCovisibleKeyFrames ();
-  std::vector<boost::shared_ptr<MapPoint>> GetMapPointMatches ();
-  void EraseMapPointMatch(const size_t &idx);
+  std::vector<boost::shared_ptr<Keyframe>> GetVectorCovisibleKeyFrames();
+  std::vector<boost::shared_ptr<MapPoint>> GetMapPointMatches();
+  void EraseMapPointMatch(const size_t& idx);
   void EraseMapPointMatch(boost::shared_ptr<MapPoint> pMP);
 
-  boost::shared_ptr<MapPoint> GetMapPoint(const size_t &idx);
+  boost::shared_ptr<MapPoint> GetMapPoint(const size_t& idx);
+  void ReplaceMapPointMatch(const size_t& idx, boost::shared_ptr<MapPoint> pMP);
 };
 
 typedef boost::shared_ptr<Keyframe> KeyframePtr;

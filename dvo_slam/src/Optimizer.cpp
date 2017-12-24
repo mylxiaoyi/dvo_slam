@@ -676,7 +676,7 @@ void Optimizer::LocalBundleAdjustment(boost::shared_ptr<Keyframe> pKF,
     g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(
         optimizer.vertex(pMP->mnId + maxKFid + 1));
     pMP->SetPos(vPoint->estimate());
-//    pMP->UpdateNormalAndDepth();
+    pMP->UpdateNormalAndDepth();
   }
 }
 

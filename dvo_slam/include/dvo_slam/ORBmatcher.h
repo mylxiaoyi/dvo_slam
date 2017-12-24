@@ -113,10 +113,10 @@ class ORBmatcher {
   //                      const cv::Mat& t12,
   //                      const float th);
 
-  //    // Project MapPoints into KeyFrame and search for duplicated MapPoints.
-  //    int Fuse (std::shared_ptr<KeyFrame> pKF,
-  //              const vector<std::shared_ptr<MapPoint>>& vpMapPoints,
-  //              const float th = 3.0);
+  // Project MapPoints into KeyFrame and search for duplicated MapPoints.
+  int Fuse(boost::shared_ptr<Keyframe> pKF,
+           const vector<boost::shared_ptr<MapPoint>>& vpMapPoints,
+           const float th = 3.0);
 
   //    // Project MapPoints into KeyFrame using a given Sim3 and search for
   //    // duplicated MapPoints.

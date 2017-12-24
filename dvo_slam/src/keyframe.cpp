@@ -129,13 +129,13 @@ Eigen::Vector3d Keyframe::unproject(double u, double v, double d) {
 }
 
 Eigen::Vector3d Keyframe::UnprojectStereo(int i) {
-    cv::KeyPoint kp = mvKeys[i];
-    cv::Mat depth = image()->level(0).depth;
-    float d = depth.at<float>(kp.pt.x, kp.pt.y);
-    if (d > 0)
-        return unproject(kp.pt.x, kp.pt.y, d);
-    else
-        return Eigen::Vector3d(0, 0, 0);
+  cv::KeyPoint kp = mvKeys[i];
+  cv::Mat depth = image()->level(0).depth;
+  float d = depth.at<float>(kp.pt.x, kp.pt.y);
+  if (d > 0)
+    return unproject(kp.pt.x, kp.pt.y, d);
+  else
+    return Eigen::Vector3d(0, 0, 0);
 }
 
 bool Keyframe::isInImageBound(Eigen::Vector2d uv) {
@@ -143,6 +143,13 @@ bool Keyframe::isInImageBound(Eigen::Vector2d uv) {
   int width = camera.width();
   int height = camera.height();
   return (uv[0] >= 0 && uv[0] < width && uv[1] >= 0 && uv[1] < height);
+}
+
+bool Keyframe::IsInImage(const float& x, const float& y) {
+  const dvo::core::RgbdCamera& camera = image()->camera_.level(0);
+  int width = camera.width();
+  int height = camera.height();
+  return (x >= 0 && x < width && y >= 0 && y < height);
 }
 
 bool Keyframe::PosInGrid(const cv::KeyPoint& kp, int& posX, int& posY) {
@@ -246,7 +253,7 @@ void Keyframe::CreateInitMap() {
       pMP->AddObservation(shared_from_this(), i);
       AddMapPoint(pMP, i);
       pMP->ComputeDistinctiveDescriptors();
-      //          pMP->UpdateNormalAndDepth();
+      pMP->UpdateNormalAndDepth();
     }
   }
 }
@@ -261,7 +268,7 @@ void Keyframe::UpdateConnections() {
   std::vector<boost::shared_ptr<MapPoint>> vpMP;
 
   {
-//    unique_lock<mutex> lockMPs(mMutexFeatures);
+    //    unique_lock<mutex> lockMPs(mMutexFeatures);
     vpMP = mvpMapPoints;
   }
 
@@ -269,7 +276,7 @@ void Keyframe::UpdateConnections() {
   // seen
   // Increase counter for those keyframes
   for (std::vector<boost::shared_ptr<MapPoint>>::iterator vit = vpMP.begin(),
-                                                   vend = vpMP.end();
+                                                          vend = vpMP.end();
        vit != vend; vit++) {
     boost::shared_ptr<MapPoint> pMP = *vit;
 
@@ -301,15 +308,17 @@ void Keyframe::UpdateConnections() {
 
   std::vector<std::pair<int, boost::shared_ptr<Keyframe>>> vPairs;
   vPairs.reserve(KFcounter.size());
-  for (std::map<boost::shared_ptr<Keyframe>, int>::iterator mit = KFcounter.begin(),
-                                                     mend = KFcounter.end();
+  for (std::map<boost::shared_ptr<Keyframe>, int>::iterator
+           mit = KFcounter.begin(),
+           mend = KFcounter.end();
        mit != mend; mit++) {
     if (mit->second > nmax) {
       nmax = mit->second;
       pKFmax = mit->first;
     }
     if (mit->second >= th) {
-      vPairs.push_back(std::pair<int, boost::shared_ptr<Keyframe>>(mit->second, mit->first));
+      vPairs.push_back(
+          std::pair<int, boost::shared_ptr<Keyframe>>(mit->second, mit->first));
       (mit->first)->AddConnection(shared_from_this(), mit->second);
     }
   }
@@ -328,7 +337,7 @@ void Keyframe::UpdateConnections() {
   }
 
   {
-//    unique_lock<mutex> lockCon(mMutexConnections);
+    //    unique_lock<mutex> lockCon(mMutexConnections);
 
     // mspConnectedKeyFrames = spConnectedKeyFrames;
     mConnectedKeyFrameWeights = KFcounter;
@@ -344,109 +353,107 @@ void Keyframe::UpdateConnections() {
   }
 }
 
-void Keyframe::AddConnection (boost::shared_ptr<Keyframe> pKF, const int& weight)
-{
-    {
-//        unique_lock<mutex> lock (mMutexConnections);
-        if (!mConnectedKeyFrameWeights.count (pKF))
-            mConnectedKeyFrameWeights[pKF] = weight;
-        else if (mConnectedKeyFrameWeights[pKF] != weight)
-            mConnectedKeyFrameWeights[pKF] = weight;
-        else
-            return;
-    }
+void Keyframe::AddConnection(boost::shared_ptr<Keyframe> pKF,
+                             const int& weight) {
+  {
+    //        unique_lock<mutex> lock (mMutexConnections);
+    if (!mConnectedKeyFrameWeights.count(pKF))
+      mConnectedKeyFrameWeights[pKF] = weight;
+    else if (mConnectedKeyFrameWeights[pKF] != weight)
+      mConnectedKeyFrameWeights[pKF] = weight;
+    else
+      return;
+  }
 
-    UpdateBestCovisibles ();
+  UpdateBestCovisibles();
 }
 
-void Keyframe::UpdateBestCovisibles ()
-{
-//    unique_lock<mutex> lock (mMutexConnections);
-    std::vector<std::pair<int, boost::shared_ptr<Keyframe>>> vPairs;
-    vPairs.reserve (mConnectedKeyFrameWeights.size ());
-    for (std::map<boost::shared_ptr<Keyframe>, int>::iterator mit = mConnectedKeyFrameWeights.begin (),
-                                       mend = mConnectedKeyFrameWeights.end ();
-         mit != mend; mit++)
-        vPairs.push_back (std::make_pair (mit->second, mit->first));
+void Keyframe::UpdateBestCovisibles() {
+  //    unique_lock<mutex> lock (mMutexConnections);
+  std::vector<std::pair<int, boost::shared_ptr<Keyframe>>> vPairs;
+  vPairs.reserve(mConnectedKeyFrameWeights.size());
+  for (std::map<boost::shared_ptr<Keyframe>, int>::iterator
+           mit = mConnectedKeyFrameWeights.begin(),
+           mend = mConnectedKeyFrameWeights.end();
+       mit != mend; mit++)
+    vPairs.push_back(std::make_pair(mit->second, mit->first));
 
-    std::sort (vPairs.begin (), vPairs.end ());
-    std::list<boost::shared_ptr<Keyframe>> lKFs;
-    std::list<int> lWs;
-    for (size_t i = 0, iend = vPairs.size (); i < iend; i++)
-    {
-        lKFs.push_front (vPairs[i].second);
-        lWs.push_front (vPairs[i].first);
-    }
+  std::sort(vPairs.begin(), vPairs.end());
+  std::list<boost::shared_ptr<Keyframe>> lKFs;
+  std::list<int> lWs;
+  for (size_t i = 0, iend = vPairs.size(); i < iend; i++) {
+    lKFs.push_front(vPairs[i].second);
+    lWs.push_front(vPairs[i].first);
+  }
 
-    mvpOrderedConnectedKeyFrames = std::vector<boost::shared_ptr<Keyframe>> (lKFs.begin (), lKFs.end ());
-    mvOrderedWeights = std::vector<int> (lWs.begin (), lWs.end ());
+  mvpOrderedConnectedKeyFrames =
+      std::vector<boost::shared_ptr<Keyframe>>(lKFs.begin(), lKFs.end());
+  mvOrderedWeights = std::vector<int>(lWs.begin(), lWs.end());
 }
 
 void Keyframe::AddChild(boost::shared_ptr<Keyframe> pKF) {
-    mspChildrens.insert(pKF);
+  mspChildrens.insert(pKF);
 }
 
-std::vector<boost::shared_ptr<Keyframe>> Keyframe::GetBestCovisibilityKeyFrames (const int& N)
-{
-//    unique_lock<mutex> lock (mMutexConnections);
-    if ((int)mvpOrderedConnectedKeyFrames.size () < N)
-        return mvpOrderedConnectedKeyFrames;
-    else
-        return std::vector<boost::shared_ptr<Keyframe>> (mvpOrderedConnectedKeyFrames.begin (),
-                                  mvpOrderedConnectedKeyFrames.begin () + N);
-}
-
-void Keyframe::ComputeBoW ()
-{
-    if (mBowVec.empty () || mFeatVec.empty ())
-    {
-        std::vector<cv::Mat> vCurrentDesc = toDescriptorVector (mDescriptors);
-        // Feature vector associate features with nodes in the 4th level (from
-        // leaves up)
-        // We assume the vocabulary tree has 6 levels, change the 4 otherwise
-        mpORBvocabulary->transform (vCurrentDesc, mBowVec, mFeatVec, 4);
-    }
-}
-
-std::vector<cv::Mat> Keyframe::toDescriptorVector(const cv::Mat &Descriptors)
-{
-    std::vector<cv::Mat> vDesc;
-    vDesc.reserve(Descriptors.rows);
-    for (int j=0;j<Descriptors.rows;j++)
-        vDesc.push_back(Descriptors.row(j));
-
-    return vDesc;
-}
-
-std::vector<boost::shared_ptr<Keyframe>> Keyframe::GetVectorCovisibleKeyFrames ()
-{
-//    unique_lock<mutex> lock (mMutexConnections);
+std::vector<boost::shared_ptr<Keyframe>> Keyframe::GetBestCovisibilityKeyFrames(
+    const int& N) {
+  //    unique_lock<mutex> lock (mMutexConnections);
+  if ((int)mvpOrderedConnectedKeyFrames.size() < N)
     return mvpOrderedConnectedKeyFrames;
+  else
+    return std::vector<boost::shared_ptr<Keyframe>>(
+        mvpOrderedConnectedKeyFrames.begin(),
+        mvpOrderedConnectedKeyFrames.begin() + N);
 }
 
-std::vector<boost::shared_ptr<MapPoint>> Keyframe::GetMapPointMatches ()
-{
-//    unique_lock<mutex> lock (mMutexFeatures);
-    return mvpMapPoints;
+void Keyframe::ComputeBoW() {
+  if (mBowVec.empty() || mFeatVec.empty()) {
+    std::vector<cv::Mat> vCurrentDesc = toDescriptorVector(mDescriptors);
+    // Feature vector associate features with nodes in the 4th level (from
+    // leaves up)
+    // We assume the vocabulary tree has 6 levels, change the 4 otherwise
+    mpORBvocabulary->transform(vCurrentDesc, mBowVec, mFeatVec, 4);
+  }
 }
 
-void Keyframe::EraseMapPointMatch(const size_t &idx)
-{
-//    unique_lock<mutex> lock(mMutexFeatures);
-    mvpMapPoints[idx].reset();
+std::vector<cv::Mat> Keyframe::toDescriptorVector(const cv::Mat& Descriptors) {
+  std::vector<cv::Mat> vDesc;
+  vDesc.reserve(Descriptors.rows);
+  for (int j = 0; j < Descriptors.rows; j++)
+    vDesc.push_back(Descriptors.row(j));
+
+  return vDesc;
 }
 
-void Keyframe::EraseMapPointMatch(boost::shared_ptr<MapPoint> pMP)
-{
-    int idx = pMP->GetIndexInKeyFrame(shared_from_this());
-    if(idx>=0)
-        mvpMapPoints[idx].reset();
+std::vector<boost::shared_ptr<Keyframe>>
+Keyframe::GetVectorCovisibleKeyFrames() {
+  //    unique_lock<mutex> lock (mMutexConnections);
+  return mvpOrderedConnectedKeyFrames;
 }
 
-boost::shared_ptr<MapPoint> Keyframe::GetMapPoint(const size_t &idx)
-{
-//    unique_lock<mutex> lock(mMutexFeatures);
-    return mvpMapPoints[idx];
+std::vector<boost::shared_ptr<MapPoint>> Keyframe::GetMapPointMatches() {
+  //    unique_lock<mutex> lock (mMutexFeatures);
+  return mvpMapPoints;
+}
+
+void Keyframe::EraseMapPointMatch(const size_t& idx) {
+  //    unique_lock<mutex> lock(mMutexFeatures);
+  mvpMapPoints[idx].reset();
+}
+
+void Keyframe::EraseMapPointMatch(boost::shared_ptr<MapPoint> pMP) {
+  int idx = pMP->GetIndexInKeyFrame(shared_from_this());
+  if (idx >= 0) mvpMapPoints[idx].reset();
+}
+
+boost::shared_ptr<MapPoint> Keyframe::GetMapPoint(const size_t& idx) {
+  //    unique_lock<mutex> lock(mMutexFeatures);
+  return mvpMapPoints[idx];
+}
+
+void Keyframe::ReplaceMapPointMatch(const size_t& idx,
+                                    boost::shared_ptr<MapPoint> pMP) {
+  mvpMapPoints[idx] = pMP;
 }
 
 } /* namespace dvo_slam */
