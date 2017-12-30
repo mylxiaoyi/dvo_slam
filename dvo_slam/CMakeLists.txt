@@ -79,7 +79,9 @@ add_library(${PROJECT_NAME}
   src/mappoint.cpp
   src/keyframe.cpp
   src/Optimizer.cpp
-  src/map.cpp
+  src/Map.cpp
+  src/KeyFrameDatabase.cpp
+  src/PnPsolver.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

@@ -24,6 +24,12 @@
 
 namespace dvo_slam {
 
+float Keyframe::fx = 0.0;
+float Keyframe::fy = 0.0;
+float Keyframe::cx = 0.0;
+float Keyframe::cy = 0.0;
+float Keyframe::invfx = 0.0;
+float Keyframe::invfy = 0.0;
 float Keyframe::mnMinX = 0.0;
 float Keyframe::mnMaxX = 0.0;
 float Keyframe::mnMinY = 0.0;
@@ -35,21 +41,16 @@ float Keyframe::mfGridElementWidthInv = 1.0;
 
 void Keyframe::detectFeatures() {
   ORBextractor extractor(1000, 1.2, 8, 20, 7);
+  //  cv::Ptr<cv::ORB> orb = cv::ORB::create(1000);
   cv::Mat img;
   image()->level(0).intensity.convertTo(img, CV_8UC1);
   extractor(img, cv::Mat(), mvKeys, mDescriptors);
+  //  orb->detectAndCompute(img, cv::Mat(), mvKeys, mDescriptors);
+  //  orb->detect(img, mvKeys);
+  //  orb->compute(img, mvKeys, mDescriptors);
+
   N = mvKeys.size();
   if (mvKeys.empty()) return;
-
-  mvpMapPoints.resize(N);
-  mvbOutlier.resize(N, false);
-
-  const dvo::core::RgbdCamera& camera = image()->level(0).camera();
-  fx = camera.intrinsics().fx();
-  fy = camera.intrinsics().fy();
-  cx = camera.intrinsics().ox();
-  cy = camera.intrinsics().oy();
-  mbf = 0.0;
 
   // Scale Level Info
   mnScaleLevels = extractor.GetLevels();
@@ -60,23 +61,37 @@ void Keyframe::detectFeatures() {
   mvLevelSigma2 = extractor.GetScaleSigmaSquares();
   mvInvLevelSigma2 = extractor.GetInverseScaleSigmaSquares();
 
+  UndistortKeyPoints();
+
+  mbf = 40.0;
   cv::Mat& depth = image()->level(0).depth;
   ComputeStereoFromRGBD(depth);
 
+  mvpMapPoints = std::vector<boost::shared_ptr<MapPoint>>(N, nullptr);
+  mvbOutlier = std::vector<bool>(N, false);
+
   if (mbInitialComputations) {
-    const dvo::core::RgbdCamera& camera = image()->level(0).camera();
-    mnMinX = 0;
-    mnMaxX = camera.width();
-    mnMinY = 0;
-    mnMaxY = camera.height();
+    ComputeImageBounds(img);
 
     mfGridElementWidthInv =
         static_cast<float>(FRAME_GRID_COLS) / (mnMaxX - mnMinX);
     mfGridElementHeightInv =
         static_cast<float>(FRAME_GRID_ROWS) / (mnMaxY - mnMinY);
 
+    const dvo::core::RgbdCamera& camera = image()->level(0).camera();
+    fx = camera.intrinsics().fx();
+    fy = camera.intrinsics().fy();
+    cx = camera.intrinsics().ox();
+    cy = camera.intrinsics().oy();
+    invfx = 1.0f / fx;
+    invfy = 1.0f / fy;
+
     mbInitialComputations = false;
   }
+
+  mb = mbf / fx;
+
+  mThDepth = mbf * 40.0 / fx;
 
   AssignFeaturesToGrid();
 }
@@ -87,8 +102,7 @@ void Keyframe::ComputeStereoFromRGBD(const cv::Mat& imDepth) {
 
   for (int i = 0; i < N; i++) {
     const cv::KeyPoint& kp = mvKeys[i];
-    //    const cv::KeyPoint& kpU = mvKeysUn[i];
-    const cv::KeyPoint& kpU = mvKeys[i];
+    const cv::KeyPoint& kpU = mvKeysUn[i];
 
     const float& v = kp.pt.y;
     const float& u = kp.pt.x;
@@ -98,6 +112,9 @@ void Keyframe::ComputeStereoFromRGBD(const cv::Mat& imDepth) {
     if (d > 0) {
       mvDepth[i] = d;
       mvuRight[i] = kpU.pt.x - mbf / d;
+//      std::cout << "d = " << d << ", x = " << kpU.pt.x
+//                << ", right = " << mvuRight[i] << ", mbf = " << mbf
+//                << std::endl;
     }
   }
 }
@@ -107,34 +124,33 @@ Eigen::Vector2d Keyframe::project(Eigen::Vector3d p) {
 }
 
 Eigen::Vector2d Keyframe::project(double x, double y, double z) {
-  const dvo::core::RgbdCamera& camera = image()->camera_.level(0);
-  double fx = camera.intrinsics().fx();
-  double fy = camera.intrinsics().fy();
-  double cx = camera.intrinsics().ox();
-  double cy = camera.intrinsics().oy();
   double u = fx * x / z + cx;
   double v = fy * y / z + cy;
   return Eigen::Vector2d(u, v);
 }
 
 Eigen::Vector3d Keyframe::unproject(double u, double v, double d) {
-  const dvo::core::RgbdCamera& camera = image()->level(0).camera();
-  double fx = camera.intrinsics().fx();
-  double fy = camera.intrinsics().fy();
-  double cx = camera.intrinsics().ox();
-  double cy = camera.intrinsics().oy();
   double x = (u - cx) / fx;
-  double y = (v - cy) / fx;
+  double y = (v - cy) / fy;
   return Eigen::Vector3d(x, y, 1) * d;
 }
 
 Eigen::Vector3d Keyframe::UnprojectStereo(int i) {
-  cv::KeyPoint kp = mvKeys[i];
+  const float d = mvDepth[i];
+  if (d > 0) {
+    Eigen::Vector3d x3Dc = unproject(mvKeysUn[i].pt.x, mvKeysUn[i].pt.y, d);
+    return pose() * x3Dc;
+  } else
+    return Eigen::Vector3d(0, 0, 0);
+}
+
+Eigen::Vector3d Keyframe::UnprojectStereo(int x, int y) {
   cv::Mat depth = image()->level(0).depth;
-  float d = depth.at<float>(kp.pt.x, kp.pt.y);
-  if (d > 0)
-    return unproject(kp.pt.x, kp.pt.y, d);
-  else
+  float d = depth.at<float>(y, x);
+  if (d > 0) {
+    Eigen::Vector3d x3Dc = unproject(x, y, d);
+    return pose() * x3Dc;
+  } else
     return Eigen::Vector3d(0, 0, 0);
 }
 
@@ -172,8 +188,7 @@ void Keyframe::AssignFeaturesToGrid() {
       mGrid[i][j].reserve(nReserve);
 
   for (int i = 0; i < N; i++) {
-    //    const cv::KeyPoint& kp = mvKeysUn[i];
-    const cv::KeyPoint& kp = mvKeys[i];
+    const cv::KeyPoint& kp = mvKeysUn[i];
 
     int nGridPosX, nGridPosY;
     if (PosInGrid(kp, nGridPosX, nGridPosY))
@@ -232,30 +247,6 @@ std::vector<size_t> Keyframe::GetFeaturesInArea(const float& x, const float& y,
   }
 
   return vIndices;
-}
-
-void Keyframe::CreateInitMap() {
-  cv::Mat depth = image()->level(0).depth;
-
-  mvpMapPoints.resize(N);
-  for (size_t i = 0; i < mvpMapPoints.size(); i++) {
-    mvpMapPoints[i].reset();
-  }
-
-  for (size_t i = 0; i < N; i++) {
-    cv::KeyPoint kp = mvKeys[i];
-    float d = depth.at<float>(kp.pt.x, kp.pt.y);
-    if (d > 0) {
-      Eigen::Vector3d x3Dc = unproject(kp.pt.x, kp.pt.y, d);
-      Eigen::Vector3d x3Dw = pose() * x3Dc;
-      boost::shared_ptr<MapPoint> pMP =
-          boost::make_shared<MapPoint>(x3Dw, shared_from_this());
-      pMP->AddObservation(shared_from_this(), i);
-      AddMapPoint(pMP, i);
-      pMP->ComputeDistinctiveDescriptors();
-      pMP->UpdateNormalAndDepth();
-    }
-  }
 }
 
 void Keyframe::AddMapPoint(boost::shared_ptr<MapPoint> pMP, size_t idx) {
@@ -454,6 +445,32 @@ boost::shared_ptr<MapPoint> Keyframe::GetMapPoint(const size_t& idx) {
 void Keyframe::ReplaceMapPointMatch(const size_t& idx,
                                     boost::shared_ptr<MapPoint> pMP) {
   mvpMapPoints[idx] = pMP;
+}
+
+std::set<boost::shared_ptr<Keyframe>> Keyframe::GetConnectedKeyFrames() {
+  //    unique_lock<mutex> lock(mMutexConnections);
+  set<boost::shared_ptr<Keyframe>> s;
+  for (map<boost::shared_ptr<Keyframe>, int>::iterator mit =
+           mConnectedKeyFrameWeights.begin();
+       mit != mConnectedKeyFrameWeights.end(); mit++)
+    s.insert(mit->first);
+  return s;
+}
+
+void Keyframe::UndistortKeyPoints() { mvKeysUn = mvKeys; }
+
+void Keyframe::ComputeImageBounds(const cv::Mat& imLeft) {
+  mnMinX = 0.0f;
+  mnMaxX = imLeft.cols;
+  mnMinY = 0.0f;
+  mnMaxY = imLeft.rows;
+}
+
+Eigen::Vector3d Keyframe::GetCameraCenter() {
+  Eigen::Affine3d pose_wc = pose();
+  Eigen::Affine3d pose_cw = pose_wc.inverse();
+  Eigen::Vector3d Ow = -pose_wc.rotation() * pose_cw.translation();
+  return Ow;
 }
 
 } /* namespace dvo_slam */

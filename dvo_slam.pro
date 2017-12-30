@@ -473,9 +473,12 @@ HEADERS += dvo_benchmark/include/dvo_benchmark/file_reader.h \
     dvo_slam/include/dvo_slam/ORBextractor.h \
     dvo_slam/include/dvo_slam/ORBmatcher.h \
     dvo_slam/include/dvo_slam/Optimizer.h \
-    map.h \
-    dvo_slam/include/dvo_slam/map.h \
-    dvo_slam/include/dvo_slam/orbvocabulary.h
+    dvo_slam/include/dvo_slam/Map.h \
+    dvo_slam/include/dvo_slam/orbvocabulary.h \
+    dvo_slam/include/dvo_slam/KeyFrameDatabase.h \
+    dvo_slam/include/dvo_slam/keyframe.h \
+    dvo_slam/include/dvo_slam/PnPsolver.h \
+    dvo_slam/include/dvo_slam/mappoint.h
 FORMS += g2o/g2o/g2o/apps/g2o_viewer/base_main_window.ui \
          g2o/g2o/g2o/apps/g2o_viewer/base_properties_widget.ui \
          g2o/g2o/g2o/examples/slam2d/base_main_window.ui
@@ -772,4 +775,6 @@ SOURCES += dvo_benchmark/src/benchmark.cpp \
     dvo_slam/src/ORBmatcher.cpp \
     dvo_slam/src/mappoint.cpp \
     dvo_slam/src/Optimizer.cpp \
-    dvo_slam/src/map.cpp
+    dvo_slam/src/Map.cpp \
+    dvo_slam/src/KeyFrameDatabase.cpp \
+    dvo_slam/src/PnPsolver.cpp

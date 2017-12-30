@@ -104,6 +104,7 @@ public:
 
   bool onAcceptCriterionTrackingResultEvaluation(const LocalTracker& lt, const LocalTracker::TrackingResult& r_odometry, const LocalTracker::TrackingResult& r_keyframe)
   {
+//    std::cout << "onAcceptCriterionTrackingResultEvaluation @ " << __LINE__ << ":" << __FILE__ << std::endl;
     std_msgs::Float64 m1, m2, m3;
     m1.data = -r_odometry.LogLikelihood;
     m2.data = -r_keyframe.LogLikelihood;
@@ -122,6 +123,7 @@ public:
 
   bool onAcceptCriterionEstimateDivergence(const LocalTracker& lt, const LocalTracker::TrackingResult& r_odometry, const LocalTracker::TrackingResult& r_keyframe)
   {
+//    std::cout << "onAcceptCriterionEstimateDivergence @ " << __LINE__ << ":" << __FILE__ << std::endl;
     //std::cerr << "----->test "  << r_keyframe.Pose.translation().norm() << " " << r_odometry.Pose.translation().norm() << std::endl;
 
     //dvo::core::AffineTransformd diff = last_transform_to_keyframe_.inverse() * r_keyframe.Pose;
@@ -159,16 +161,19 @@ public:
 
   bool onAcceptCriterionDistance(const LocalTracker& lt, const LocalTracker::TrackingResult& r_odometry, const LocalTracker::TrackingResult& r_keyframe)
   {
+//    std::cout << "onAcceptCriterionDistance @ " << __LINE__ << ":" << __FILE__ << std::endl;
     return r_keyframe.Transformation.translation().norm() < cfg_.MaxTranslationalDistance;
   }
 
   bool onAcceptCriterionConstraintRatio(const LocalTracker& lt, const LocalTracker::TrackingResult& r_odometry, const LocalTracker::TrackingResult& r_keyframe)
   {
+//    std::cout << "onAcceptCriterionConstraintRatio @ " << __LINE__ << ":" << __FILE__ << std::endl;
     return (double(r_keyframe.Statistics.Levels.back().Iterations.back().ValidConstraints) / double(r_keyframe.Statistics.Levels.back().ValidPixels)) > cfg_.MinEquationSystemConstraintRatio;
   }
 
   bool onAcceptCriterionConditionNumber(const LocalTracker& lt, const LocalTracker::TrackingResult& r_odometry, const LocalTracker::TrackingResult& r_keyframe)
   {
+//    std::cout << "onAcceptCriterionConditionNumber @ " << __LINE__ << ":" << __FILE__ << std::endl;
     std_msgs::Float64 kappa_odometry, kappa_keyframe, de_odometry, de_keyframe;
 
     Eigen::SelfAdjointEigenSolver<dvo::core::Matrix6d> eigensolver1(r_odometry.Information);

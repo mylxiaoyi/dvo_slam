@@ -63,6 +63,7 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   size_t N;
   std::vector<cv::KeyPoint> mvKeys;
+  std::vector<cv::KeyPoint> mvKeysUn;
   cv::Mat mDescriptors;
   std::vector<boost::shared_ptr<MapPoint>> mvpMapPoints;
   std::vector<bool> mvbOutlier;
@@ -99,9 +100,15 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   bool mbBad;
 
-  float fx, fy;
-  float cx, cy;
+  static float fx;
+  static float fy;
+  static float cx;
+  static float cy;
+  static float invfx;
+  static float invfy;
+
   float mbf, mb;
+  float mThDepth;
 
   std::vector<float> mvuRight, mvDepth;
 
@@ -117,6 +124,14 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   unsigned long int mnBAFixedForKF;
   unsigned long int mnFuseTargetForKF;
 
+  // Variables used by the keyframe database
+  long unsigned int mnLoopQuery;
+  int mnLoopWords;
+  float mLoopScore;
+  long unsigned int mnRelocQuery;
+  int mnRelocWords;
+  float mRelocScore;
+
   void detectFeatures();
 
   void ComputeStereoFromRGBD(const cv::Mat& imDepth);
@@ -128,6 +143,7 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   Eigen::Vector3d unproject(double u, double v, double d);
 
   Eigen::Vector3d UnprojectStereo(int i);
+  Eigen::Vector3d UnprojectStereo(int x, int y);
 
   bool isInImageBound(Eigen::Vector2d uv);
   bool IsInImage(const float& x, const float& y);
@@ -139,8 +155,6 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   std::vector<size_t> GetFeaturesInArea(const float& x, const float& y,
                                         const float& r, const int minLevel = -1,
                                         const int maxLevel = -1) const;
-
-  void CreateInitMap();
 
   void AddMapPoint(boost::shared_ptr<MapPoint> pMP, size_t idx);
 
@@ -173,6 +187,13 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   boost::shared_ptr<MapPoint> GetMapPoint(const size_t& idx);
   void ReplaceMapPointMatch(const size_t& idx, boost::shared_ptr<MapPoint> pMP);
+
+  std::set<boost::shared_ptr<Keyframe>> GetConnectedKeyFrames();
+
+  void UndistortKeyPoints();
+  void ComputeImageBounds(const cv::Mat &imLeft);
+
+  Eigen::Vector3d GetCameraCenter();
 };
 
 typedef boost::shared_ptr<Keyframe> KeyframePtr;

@@ -52,14 +52,12 @@ class ORBmatcher {
                          const KeyframePtr& LastFrame, const float th,
                          const bool bMono = false);
 
-  //    // Project MapPoints seen in KeyFrame into the Frame and search matches.
-  //    // Used in relocalisation (Tracking)
-  //    int SearchByProjection (std::shared_ptr<Frame> CurrentFrame,
-  //                            std::shared_ptr<KeyFrame> pKF,
-  //                            const std::set<std::shared_ptr<MapPoint>>&
-  //                            sAlreadyFound,
-  //                            const float th,
-  //                            const int ORBdist);
+  // Project MapPoints seen in KeyFrame into the Frame and search matches.
+  // Used in relocalisation (Tracking)
+  int SearchByProjection(
+      boost::shared_ptr<Keyframe> CurrentFrame, boost::shared_ptr<Keyframe> pKF,
+      const std::set<boost::shared_ptr<MapPoint>>& sAlreadyFound, const float th,
+      const int ORBdist);
 
   //    // Project MapPoints using a Similarity Transformation and search
   //    matches.
@@ -83,9 +81,9 @@ class ORBmatcher {
   //    int SearchByBoW2 (std::shared_ptr<KeyFrame> pKF,
   //                      std::shared_ptr<KeyFrame> pKF2,
   //                      vector<std::shared_ptr<MapPoint>>& vpMapPointMatches);
-  //    int SearchByBoW (std::shared_ptr<KeyFrame> pKF1,
-  //                     std::shared_ptr<KeyFrame> pKF2,
-  //                     vector<std::shared_ptr<MapPoint>>& vpMatches12);
+  int SearchByBoW(boost::shared_ptr<Keyframe> pKF1,
+                  boost::shared_ptr<Keyframe> pKF2,
+                  vector<boost::shared_ptr<MapPoint>>& vpMatches12);
 
   //    // Matching for the Map Initialization (only used in the monocular case)
   //    int SearchForInitialization (std::shared_ptr<Frame> F1,

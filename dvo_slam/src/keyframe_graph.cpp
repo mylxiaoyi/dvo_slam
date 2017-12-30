@@ -28,9 +28,11 @@
 #include <dvo_slam/constraints/constraint_proposal_validator.h>
 #include <dvo_slam/constraints/constraint_proposal_voter.h>
 
+#include <dvo_slam/KeyFrameDatabase.h>
+#include <dvo_slam/Map.h>
 #include <dvo_slam/ORBmatcher.h>
 #include <dvo_slam/Optimizer.h>
-#include <dvo_slam/map.h>
+#include <dvo_slam/PnPsolver.h>
 #include <dvo_slam/mappoint.h>
 #include <dvo_slam/orbvocabulary.h>
 
@@ -68,6 +70,8 @@
 #include <interactive_markers/interactive_marker_server.h>
 #include <visualization_msgs/InteractiveMarker.h>
 
+#include <opencv2/features2d.hpp>
+
 using namespace dvo_slam::constraints;
 
 namespace dvo_slam {
@@ -95,6 +99,18 @@ static Eigen::Affine3d toAffine(const Eigen::Isometry3d& pose) {
   Eigen::Affine3d p(pose.rotation());
   p.translation() = pose.translation();
 
+  return p;
+}
+
+static Eigen::Affine3d toAffine(const cv::Mat& pose) {
+  Eigen::Matrix<double, 3, 3> R;
+  R << pose.at<float>(0, 0), pose.at<float>(0, 1), pose.at<float>(0, 2),
+      pose.at<float>(1, 0), pose.at<float>(1, 1), pose.at<float>(1, 2),
+      pose.at<float>(2, 0), pose.at<float>(2, 1), pose.at<float>(2, 2);
+  Eigen::Vector3d t;
+  t << pose.at<float>(0, 3), pose.at<float>(1, 3), pose.at<float>(2, 3);
+  Eigen::Affine3d p(R);
+  p.translation() = t;
   return p;
 }
 
@@ -139,6 +155,9 @@ class KeyframeGraphImpl {
         "/media/datadisk/work/ros_dvoslam/src/dvo_slam/dvo_slam/voc/ORBvoc.bin";
     if (mpVocabulary->loadFromBinaryFile(voc_file))
       std::cout << "load voc file successfuly" << std::endl;
+    mpKeyFrameDB = boost::make_shared<dvo_slam::KeyframeDatabase>(mpVocabulary);
+
+    mpMatcher = cv::BFMatcher::create();
   }
 
   ~KeyframeGraphImpl() {
@@ -438,6 +457,30 @@ class KeyframeGraphImpl {
     }
   }
 
+  static cv::Mat img1, img2;
+
+  static void img1_mouse_cb(int event, int x, int y, int flags,
+                            void* userdata) {
+    switch (event) {
+      case cv::EVENT_LBUTTONDOWN:
+        std::cout << "x = " << x << ", y = " << y << std::endl;
+        KeyframeGraphImpl* this_ptr = (KeyframeGraphImpl*)userdata;
+        cv::circle(img1, cv::Point(x, y), 5, cv::Scalar(0, 0, 255));
+        cv::imshow("img1", img1);
+        Eigen::Vector3d x3Dw = this_ptr->mLastKeyframe->UnprojectStereo(x, y);
+        std::cout << "x3Dw = " << x3Dw << std::endl;
+        Eigen::Vector3d x3Dc =
+            this_ptr->mCurrentKeyframe->pose().inverse() * x3Dw;
+        Eigen::Vector2d uv = this_ptr->mCurrentKeyframe->project(x3Dc);
+        std::cout << "uv = " << uv << std::endl;
+        cv::circle(img2, cv::Point(uv(0), uv(1)), 5, cv::Scalar(0, 0, 255));
+        cv::imshow("img2", img2);
+        break;
+        //      default:
+        //          break;
+    }
+  }
+
   void newKeyframe(const LocalMap::Ptr& map) {
     tbb::mutex::scoped_lock l(new_keyframe_sync_);
 
@@ -449,58 +492,181 @@ class KeyframeGraphImpl {
     KeyframeVector constraint_candidates;
     ConstraintProposalVector constraints;
 
+    mLastKeyframe.swap(mCurrentKeyframe);
+
     // insert keyframe into data structures
-    KeyframePtr keyframe = insertNewKeyframe(map);
+    //    KeyframePtr keyframe = insertNewKeyframe(map);
+    mCurrentKeyframe = insertNewKeyframe(map);
 
     // mylxiaoyi: detect features
-    keyframe->detectFeatures();
-    keyframe->mpORBvocabulary = mpVocabulary;
+    mCurrentKeyframe->detectFeatures();
+    mCurrentKeyframe->mpORBvocabulary = mpVocabulary;
 
     // early abort
     if (keyframes_.size() == 1) {
-      keyframe->CreateInitMap();
-      std::cout << "map points in first keyframe = "
-                << keyframe->mvpMapPoints.size() << std::endl;
-      return;
-    } else if (keyframes_.size() > 1) {
-      KeyframePtr last_keyframe = keyframes_[keyframes_.size() - 2];
-      ORBmatcher matcher(0.9, true);
-
-      int nmatches =
-          matcher.SearchByProjection(keyframe, last_keyframe, 15, false);
-
-      if (nmatches < 20) {
-        matcher.SearchByProjection(keyframe, last_keyframe, 30, false);
-      }
-
-      std::cout << "nmatches = " << nmatches << std::endl;
-      Optimizer::PoseOptimization(keyframe);
-
       //      keyframe->CreateInitMap();
+      CreateInitMap(mCurrentKeyframe);
+      //      mLastKeyframe = mCurrentKeyframe;
+      return;
+    }
 
-      // discards outliers
-      for (size_t i = 0; i < keyframe->N; i++) {
-        boost::shared_ptr<MapPoint> pMP = keyframe->mvpMapPoints[i];
-        if (pMP) {
-          if (keyframe->mvbOutlier[i]) {
-            keyframe->mvpMapPoints[i].reset();
-            keyframe->mvbOutlier[i] = false;
-          }
+    sw_constraint.start();
+    // find possible constraints
+    constraint_search_->findPossibleConstraints(keyframes_, mCurrentKeyframe,
+                                                constraint_candidates);
+    sw_constraint.stopAndPrint();
+    std::cerr << "constraints to validate: " << constraint_candidates.size()
+              << std::endl;
+
+    sw_validation.start();
+    // validate constraints
+    validateKeyframeConstraintsParallel(constraint_candidates, mCurrentKeyframe,
+                                        constraints);
+
+    ROS_WARN_STREAM("adding " << constraints.size() << " new constraints");
+
+    sw_validation.stopAndPrint();
+    sw_insert.start();
+    // update graph
+    size_t max_distance =
+        static_cast<size_t>(insertNewKeyframeConstraints(constraints));
+    sw_insert.stopAndPrint();
+
+    if (max_distance >= cfg_.MinConstraintDistance) {
+      sw_opt.start();
+      // optimize
+      keyframegraph_.initializeOptimization();
+      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+
+      if (cfg_.OptimizationRemoveOutliers) {
+        int removed =
+            removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
+
+        std::cout << "removed = " << removed << ", keyframegraph.size = "
+                  << keyframegraph_.vertices().size() << std::endl;
+
+        if (removed > 0) {
+          keyframegraph_.initializeOptimization();
         }
       }
 
-      ProcessNewKeyFrame(keyframe);
+      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
 
-      // Triangulate new MapPoints
-      CreateNewMapPoints(keyframe);
+      //// update keyframe database
+      updateKeyframePosesFromGraph();
 
-      SearchInNeighbors(keyframe);
-
-      bool mbAbortBA = false;
-      Optimizer::LocalBundleAdjustment(keyframe, &mbAbortBA, mpMap);
+      sw_opt.stopAndPrint();
     }
 
+    if (mLastKeyframe) {
+      ORBmatcher matcher(0.9, true);
+
+      int nmatches = matcher.SearchByProjection(mCurrentKeyframe, mLastKeyframe,
+                                                15, false);
+
+      if (nmatches < 20) {
+        matcher.SearchByProjection(mCurrentKeyframe, mLastKeyframe, 30, false);
+      }
+
+      std::cout << "nmatches = " << nmatches << std::endl;
+
+      if (nmatches >= 20) {
+        Optimizer::PoseOptimization(mCurrentKeyframe);
+        g2o::VertexSE3* vertex =
+            (g2o::VertexSE3*)keyframegraph_.vertex(mCurrentKeyframe->id());
+        vertex->setEstimate(toIsometry(mCurrentKeyframe->pose()));
+
+        // discards outliers
+        for (size_t i = 0; i < mCurrentKeyframe->N; i++) {
+          boost::shared_ptr<MapPoint> pMP = mCurrentKeyframe->mvpMapPoints[i];
+          if (pMP) {
+            if (mCurrentKeyframe->mvbOutlier[i]) {
+              mCurrentKeyframe->mvpMapPoints[i].reset();
+              mCurrentKeyframe->mvbOutlier[i] = false;
+            }
+          }
+        }
+
+//        std::cout << "pose1 = " << mLastKeyframe->pose().matrix() << std::endl;
+//        std::cout << "pose2 = " << mCurrentKeyframe->pose().matrix()
+//                  << std::endl;
+//        //      cv::Mat img1, img2;
+//        mLastKeyframe->image()->level(0).intensity.convertTo(img1, CV_8UC1);
+//        mCurrentKeyframe->image()->level(0).intensity.convertTo(img2, CV_8UC1);
+//        cv::drawKeypoints(img1, mLastKeyframe->mvKeys, img1);
+//        cv::drawKeypoints(img2, mCurrentKeyframe->mvKeys, img2);
+//        cv::imshow("img1", img1);
+//        cv::setMouseCallback("img1", &KeyframeGraphImpl::img1_mouse_cb, this);
+//        cv::imshow("img2", img2);
+//        cv::Mat img;
+//        std::vector<cv::DMatch> matches;
+//        for (size_t i = 0; i < mCurrentKeyframe->N; i++) {
+//          boost::shared_ptr<MapPoint> pMP = mCurrentKeyframe->mvpMapPoints[i];
+//          if (pMP && !mCurrentKeyframe->mvbOutlier[i]) {
+//            int queryIdx = pMP->GetObservations()[mLastKeyframe];
+//            matches.push_back(cv::DMatch(queryIdx, i, 0.0));
+//          }
+//        }
+//        std::cout << "matches.size = " << matches.size() << std::endl;
+//        cv::drawMatches(img1, mLastKeyframe->mvKeys, img2,
+//                        mCurrentKeyframe->mvKeys, matches, img);
+//        cv::imshow("matches", img);
+//        cv::waitKey(0);
+
+        ProcessNewKeyFrame(mCurrentKeyframe);
+
+        CreateMoreMapPoints(mCurrentKeyframe);
+
+        // Triangulate new MapPoints
+        CreateNewMapPoints(mCurrentKeyframe);
+
+        SearchInNeighbors(mCurrentKeyframe);
+
+        bool mbAbortBA = false;
+        Optimizer::LocalBundleAdjustment(mCurrentKeyframe, &mbAbortBA, mpMap);
+
+        updateKeyframePosesToGraph();
+      } else {
+        std::cout << "nmatches is not enough" << std::endl;
+
+        //        bool bOK = Relocalization(keyframe);
+        //        if (bOK) std::cout << "relocalization" << std::endl;
+      }
+    }
+
+
     map_changed_(*me_);
+
+    //    mLastKeyframe = mCurrentKeyframe;
+  }
+
+  void CreateInitMap(KeyframePtr keyframe) {
+    // Create MapPoints and asscoiate to KeyFrame
+    for (int i = 0; i < keyframe->N; i++) {
+      float z = keyframe->mvDepth[i];
+      if (z > 0) {
+        Eigen::Vector3d x3D = keyframe->UnprojectStereo(i);
+        boost::shared_ptr<MapPoint> pNewMP =
+            boost::make_shared<MapPoint>(x3D, keyframe, mpMap);
+        pNewMP->AddObservation(keyframe, i);
+        keyframe->AddMapPoint(pNewMP, i);
+        pNewMP->ComputeDistinctiveDescriptors();
+        pNewMP->UpdateNormalAndDepth();
+        mpMap->AddMapPoint(pNewMP);
+
+        //        keyframe->mvpMapPoints[i] = pNewMP;
+      }
+    }
+
+    int counter = 0;
+    for (size_t i = 0; i < keyframe->mvpMapPoints.size(); i++) {
+      boost::shared_ptr<MapPoint> pMP = keyframe->mvpMapPoints[i];
+      if (pMP) counter++;
+    }
+    std::cout << "counter = " << counter << std::endl;
+
+    cout << "New map created with " << mpMap->MapPointsInMap() << " points"
+         << endl;
   }
 
   void ProcessNewKeyFrame(KeyframePtr keyframe) {
@@ -515,6 +681,7 @@ class KeyframeGraphImpl {
             pMP->AddObservation(keyframe, i);
             pMP->UpdateNormalAndDepth();
             pMP->ComputeDistinctiveDescriptors();
+            keyframe->AddMapPoint(pMP, i);
           }
         }
       }
@@ -617,11 +784,11 @@ class KeyframeGraphImpl {
         const int& idx1 = vMatchedIndices[ikp].first;
         const int& idx2 = vMatchedIndices[ikp].second;
 
-        const cv::KeyPoint& kp1 = keyframe->mvKeys[idx1];
+        const cv::KeyPoint& kp1 = keyframe->mvKeysUn[idx1];
         const float kp1_ur = keyframe->mvuRight[idx1];
         bool bStereo1 = kp1_ur >= 0;
 
-        const cv::KeyPoint& kp2 = pKF2->mvKeys[idx2];
+        const cv::KeyPoint& kp2 = pKF2->mvKeysUn[idx2];
         const float kp2_ur = pKF2->mvuRight[idx2];
         bool bStereo2 = kp2_ur >= 0;
 
@@ -780,8 +947,7 @@ class KeyframeGraphImpl {
           continue;
 
         // Triangulation is succesfull
-        boost::shared_ptr<MapPoint> pMP(
-            new MapPoint(x3D, keyframe /*, mpMap*/));
+        boost::shared_ptr<MapPoint> pMP(new MapPoint(x3D, keyframe, mpMap));
 
         pMP->AddObservation(keyframe, idx1);
         pMP->AddObservation(pKF2, idx2);
@@ -796,6 +962,57 @@ class KeyframeGraphImpl {
         mpMap->AddMapPoint(pMP);
 
         nnew++;
+      }
+    }
+  }
+
+  void CreateMoreMapPoints(KeyframePtr keyframe) {
+    // We sort points by the measured depth by the stereo/RGBD sensor.
+    // We create all those MapPoints whose depth < mThDepth.
+    // If there are less than 100 close points we create the 100 closest.
+    vector<pair<float, int>> vDepthIdx;
+    vDepthIdx.reserve(keyframe->N);
+    for (int i = 0; i < keyframe->N; i++) {
+      float z = keyframe->mvDepth[i];
+      if (z > 0) {
+        vDepthIdx.push_back(make_pair(z, i));
+      }
+    }
+
+    if (!vDepthIdx.empty()) {
+      sort(vDepthIdx.begin(), vDepthIdx.end());
+
+      int nPoints = 0;
+      for (size_t j = 0; j < vDepthIdx.size(); j++) {
+        int i = vDepthIdx[j].second;
+
+        bool bCreateNew = false;
+
+        boost::shared_ptr<MapPoint> pMP = keyframe->mvpMapPoints[i];
+        if (!pMP)
+          bCreateNew = true;
+        else if (pMP->Observations() < 1) {
+          bCreateNew = true;
+          keyframe->mvpMapPoints[i].reset();
+        }
+
+        if (bCreateNew) {
+          Eigen::Vector3d x3D = keyframe->UnprojectStereo(i);
+          boost::shared_ptr<MapPoint> pNewMP =
+              boost::make_shared<MapPoint>(x3D, keyframe, mpMap);
+          pNewMP->AddObservation(keyframe, i);
+          keyframe->AddMapPoint(pNewMP, i);
+          pNewMP->ComputeDistinctiveDescriptors();
+          pNewMP->UpdateNormalAndDepth();
+          mpMap->AddMapPoint(pNewMP);
+
+          //          mCurrentFrame.mvpMapPoints[i] = pNewMP;
+          nPoints++;
+        } else {
+          nPoints++;
+        }
+
+        if (vDepthIdx[j].first > keyframe->mThDepth && nPoints > 100) break;
       }
     }
   }
@@ -927,6 +1144,157 @@ class KeyframeGraphImpl {
 
     m << 0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0;
     return m;
+  }
+
+  bool Relocalization(KeyframePtr keyframe) {
+    // Compute Bag of Words Vector
+    keyframe->ComputeBoW();
+
+    // Relocalization is performed when tracking is lost
+    // Track Lost: Query KeyFrame Database for keyframe candidates for
+    // relocalisation
+    vector<boost::shared_ptr<Keyframe>> vpCandidateKFs =
+        mpKeyFrameDB->DetectMatchedKeyFrames(keyframe);
+
+    if (vpCandidateKFs.empty()) return false;
+
+    const int nKFs = vpCandidateKFs.size();
+
+    // We perform first an ORB matching with each candidate
+    // If enough matches are found we setup a PnP solver
+    ORBmatcher matcher(0.75, true);
+
+    vector<boost::shared_ptr<PnPsolver>> vpPnPsolvers;
+    vpPnPsolvers.resize(nKFs);
+
+    vector<vector<boost::shared_ptr<MapPoint>>> vvpMapPointMatches;
+    vvpMapPointMatches.resize(nKFs);
+
+    vector<bool> vbDiscarded;
+    vbDiscarded.resize(nKFs);
+
+    int nCandidates = 0;
+
+    for (int i = 0; i < nKFs; i++) {
+      boost::shared_ptr<Keyframe> pKF = vpCandidateKFs[i];
+      if (pKF->isBad())
+        vbDiscarded[i] = true;
+      else {
+        int nmatches =
+            matcher.SearchByBoW(pKF, keyframe, vvpMapPointMatches[i]);
+        if (nmatches < 15) {
+          vbDiscarded[i] = true;
+          continue;
+        } else {
+          boost::shared_ptr<PnPsolver> pSolver(
+              new PnPsolver(keyframe, vvpMapPointMatches[i]));
+          pSolver->SetRansacParameters(0.99, 10, 300, 4, 0.5, 5.991);
+          vpPnPsolvers[i] = pSolver;
+          nCandidates++;
+        }
+      }
+    }
+
+    // Alternatively perform some iterations of P4P RANSAC
+    // Until we found a camera pose supported by enough inliers
+    bool bMatch = false;
+    ORBmatcher matcher2(0.9, true);
+
+    while (nCandidates > 0 && !bMatch) {
+      for (int i = 0; i < nKFs; i++) {
+        if (vbDiscarded[i]) continue;
+
+        // Perform 5 Ransac Iterations
+        vector<bool> vbInliers;
+        int nInliers;
+        bool bNoMore;
+
+        boost::shared_ptr<PnPsolver> pSolver = vpPnPsolvers[i];
+        cv::Mat Tcw = pSolver->iterate(5, bNoMore, vbInliers, nInliers);
+
+        // If Ransac reachs max. iterations discard keyframe
+        if (bNoMore) {
+          vbDiscarded[i] = true;
+          nCandidates--;
+        }
+
+        // If a Camera Pose is computed, optimize
+        if (!Tcw.empty()) {
+          //          Tcw.copyTo(mCurrentFrame->mTcw);
+          keyframe->pose(toAffine(Tcw).inverse());
+
+          set<boost::shared_ptr<MapPoint>> sFound;
+
+          const int np = vbInliers.size();
+
+          for (int j = 0; j < np; j++) {
+            if (vbInliers[j]) {
+              keyframe->mvpMapPoints[j] = vvpMapPointMatches[i][j];
+              sFound.insert(vvpMapPointMatches[i][j]);
+            } else
+              keyframe->mvpMapPoints[j].reset();
+          }
+
+          int nGood = Optimizer::PoseOptimization(keyframe);
+
+          if (nGood < 10) continue;
+
+          for (int io = 0; io < keyframe->N; io++)
+            if (keyframe->mvbOutlier[io])
+              //                        mCurrentFrame.mvpMapPoints[io]
+              //                        = static_cast<MapPoint*>
+              //                        (NULL);
+              keyframe->mvpMapPoints[io].reset();
+
+          // If few inliers, search by projection in a coarse window and
+          // optimize again
+          if (nGood < 50) {
+            int nadditional = matcher2.SearchByProjection(
+                keyframe, vpCandidateKFs[i], sFound, 10, 100);
+
+            if (nadditional + nGood >= 50) {
+              nGood = Optimizer::PoseOptimization(keyframe);
+
+              // If many inliers but still not enough, search by
+              // projection again in a narrower window
+              // the camera has been already optimized with many
+              // points
+              if (nGood > 30 && nGood < 50) {
+                sFound.clear();
+                for (int ip = 0; ip < keyframe->N; ip++)
+                  if (keyframe->mvpMapPoints[ip])
+                    sFound.insert(keyframe->mvpMapPoints[ip]);
+                nadditional = matcher2.SearchByProjection(
+                    keyframe, vpCandidateKFs[i], sFound, 3, 64);
+
+                // Final optimization
+                if (nGood + nadditional >= 50) {
+                  nGood = Optimizer::PoseOptimization(keyframe);
+
+                  for (int io = 0; io < keyframe->N; io++)
+                    if (keyframe->mvbOutlier[io])
+                      keyframe->mvpMapPoints[io] = NULL;
+                }
+              }
+            }
+          }
+
+          // If the pose is supported by enough inliers stop ransacs and
+          // continue
+          if (nGood >= 50) {
+            bMatch = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!bMatch) {
+      return false;
+    } else {
+      mnLastRelocFrameId = keyframe->id();
+      return true;
+    }
   }
 
   ConstraintProposalValidatorPtr createConstraintProposalValidator() {
@@ -1114,6 +1482,33 @@ class KeyframeGraphImpl {
     }
   }
 
+  void updateKeyframePosesToGraph() {
+    for (KeyframeVector::iterator it = keyframes_.begin();
+         it != keyframes_.end(); ++it) {
+      const KeyframePtr& keyframe = *it;
+
+      g2o::VertexSE3* vertex =
+          (g2o::VertexSE3*)keyframegraph_.vertex(keyframe->id());
+
+      //      keyframe->pose(toAffine(vertex->estimate()));
+      vertex->setEstimate(toIsometry(keyframe->pose()));
+    }
+
+    //      keyframegraph_.initializeOptimization();
+    //      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+
+    //      if (cfg_.OptimizationRemoveOutliers) {
+    //        int removed =
+    //            removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
+
+    //        if (removed > 0) {
+    //          keyframegraph_.initializeOptimization();
+    //        }
+    //      }
+
+    //      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+  }
+
   struct FindEdge {
     int id1, id2;
 
@@ -1172,7 +1567,8 @@ class KeyframeGraphImpl {
   }
 
   KeyframePtr insertNewKeyframe(const LocalMap::Ptr& m) {
-    // update keyframe pose, because its probably different from the one, which
+    // update keyframe pose, because its probably different from the one,
+    // which
     // was used during local map initialization
     if (!keyframes_.empty()) {
       g2o::HyperGraph::Vertex* last_kv_tmp =
@@ -1231,7 +1627,8 @@ class KeyframeGraphImpl {
       g2o::VertexSE3* kv =
           (g2o::VertexSE3*)keyframegraph_.vertex(next_keyframe_id_);
 
-      // find the odometry edge, which connects the old keyframe vertex with the
+      // find the odometry edge, which connects the old keyframe vertex with
+      // the
       // new keyframe vertex
       g2o::OptimizableGraph::EdgeSet::iterator ke =
           std::find_if(kv->edges().begin(), kv->edges().end(),
@@ -1325,7 +1722,17 @@ class KeyframeGraphImpl {
   // mylxiaoyi
   boost::shared_ptr<Map> mpMap;
   boost::shared_ptr<dvo_slam::ORBVocabulary> mpVocabulary;
+  boost::shared_ptr<dvo_slam::KeyframeDatabase> mpKeyFrameDB;
+
+  unsigned long int mnLastRelocFrameId;
+
+  cv::Ptr<cv::BFMatcher> mpMatcher;
+
+  dvo_slam::KeyframePtr mLastKeyframe;
+  dvo_slam::KeyframePtr mCurrentKeyframe;
 };
+cv::Mat KeyframeGraphImpl::img1 = cv::Mat();
+cv::Mat KeyframeGraphImpl::img2 = cv::Mat();
 } /* namespace internal */
 
 KeyframeGraph::KeyframeGraph() : impl_(new internal::KeyframeGraphImpl()) {

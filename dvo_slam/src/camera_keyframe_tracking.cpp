@@ -1,7 +1,8 @@
 /**
  *  This file is part of dvo.
  *
- *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical University of Munich)
+ *  Copyright 2012 Christian Kerl <christian.kerl@in.tum.de> (Technical
+ * University of Munich)
  *  For more information see <http://vision.in.tum.de/data/software/dvo>.
  *
  *  dvo is free software: you can redistribute it and/or modify
@@ -18,8 +19,8 @@
  *  along with dvo.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <boost/bind.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <boost/bind.hpp>
 
 #include <tf/transform_broadcaster.h>
 #include <tf_conversions/tf_eigen.h>
@@ -30,48 +31,54 @@
 #include <dvo/dense_tracking.h>
 #include <dvo/util/stopwatch.h>
 
-#include <dvo_slam/config.h>
 #include <dvo_slam/camera_keyframe_tracking.h>
+#include <dvo_slam/config.h>
 
 #include <dvo_slam/PoseStampedArray.h>
 #include <dvo_slam/serialization/map_serializer.h>
 
 #include <dvo_slam/visualization/graph_visualizer.h>
 
-#include <dvo_ros/util/util.h>
 #include <dvo_ros/util/configtools.h>
+#include <dvo_ros/util/util.h>
 #include <dvo_ros/visualization/ros_camera_trajectory_visualizer.h>
 
-
-namespace dvo_slam
-{
+namespace dvo_slam {
 
 using namespace dvo;
 using namespace dvo::core;
 using namespace dvo::util;
 
-CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh, ros::NodeHandle& nh_private) :
-//  CameraBase(nh, nh_private),
-  tracker_reconfigure_server_(ros::NodeHandle(nh_private, "tracking")),
-  slam_reconfigure_server_(ros::NodeHandle(nh_private, "slam")),
-  tracker_cfg(dvo::DenseTracker::getDefaultConfig()),
-  vis_(new dvo_ros::visualization::RosCameraTrajectoryVisualizer(nh)),
-  graph_vis_(new dvo_slam::visualization::GraphVisualizer(*vis_)),
-  connected(false), nh_(nh)
-{
+CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh,
+                                             ros::NodeHandle& nh_private)
+    :  //  CameraBase(nh, nh_private),
+      tracker_reconfigure_server_(ros::NodeHandle(nh_private, "tracking")),
+      slam_reconfigure_server_(ros::NodeHandle(nh_private, "slam")),
+      tracker_cfg(dvo::DenseTracker::getDefaultConfig()),
+      vis_(new dvo_ros::visualization::RosCameraTrajectoryVisualizer(nh)),
+      graph_vis_(new dvo_slam::visualization::GraphVisualizer(*vis_)),
+      connected(false),
+      nh_(nh) {
   ROS_INFO("CameraDenseTracker::ctor(...)");
 
-  pose_publisher = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose", 1);
+  pose_publisher =
+      nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose", 1);
   graph_publisher = nh.advertise<dvo_slam::PoseStampedArray>("graph", 1);
 
-  TrackerReconfigureServer::CallbackType tracker_reconfigure_server_callback = boost::bind(&CameraKeyframeTracker::handleTrackerConfig, this, _1, _2);
-//  tracker_reconfigure_server_.setCallback(tracker_reconfigure_server_callback);
+  TrackerReconfigureServer::CallbackType tracker_reconfigure_server_callback =
+      boost::bind(&CameraKeyframeTracker::handleTrackerConfig, this, _1, _2);
+  //  tracker_reconfigure_server_.setCallback(tracker_reconfigure_server_callback);
 
-  SlamReconfigureServer::CallbackType slam_reconfigure_server_callback = boost::bind(&CameraKeyframeTracker::handleSlamConfig, this, _1, _2);
-//  slam_reconfigure_server_.setCallback(slam_reconfigure_server_callback);
+  SlamReconfigureServer::CallbackType slam_reconfigure_server_callback =
+      boost::bind(&CameraKeyframeTracker::handleSlamConfig, this, _1, _2);
+  //  slam_reconfigure_server_.setCallback(slam_reconfigure_server_callback);
 
   accumulated_transform.setIdentity();
 
+//  rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+//      nh, "camera/rgb/image_color", 1);
+//  depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+//      nh, "camera/depth/image", 1);
   rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
       nh, "camera/rgb/image_raw", 1);
   depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
@@ -85,34 +92,37 @@ CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh, ros::NodeHandl
   startSynchronizedImageStream();
 }
 
-CameraKeyframeTracker::~CameraKeyframeTracker()
-{
+CameraKeyframeTracker::~CameraKeyframeTracker() {
   delete vis_;
   delete graph_vis_;
 }
 
-bool CameraKeyframeTracker::hasChanged(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg)
-{
+bool CameraKeyframeTracker::hasChanged(
+    const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg) {
   return width != camera_info_msg->width || height != camera_info_msg->height;
 }
 
-bool CameraKeyframeTracker::hasChanged(const cv::Mat &img)
-{
+bool CameraKeyframeTracker::hasChanged(const cv::Mat& img) {
   return width != img.cols || height != img.rows;
 }
 
-void CameraKeyframeTracker::reset(const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg)
-{
-  //intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0], camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
-  intrinsics = IntrinsicMatrix::create(camera_info_msg->P[0], camera_info_msg->P[5], camera_info_msg->P[2], camera_info_msg->P[6]);
-  camera.reset(new dvo::core::RgbdCameraPyramid(camera_info_msg->width, camera_info_msg->height, intrinsics));
+void CameraKeyframeTracker::reset(
+    const sensor_msgs::CameraInfo::ConstPtr& camera_info_msg) {
+  // intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0],
+  // camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
+  intrinsics =
+      IntrinsicMatrix::create(camera_info_msg->P[0], camera_info_msg->P[5],
+                              camera_info_msg->P[2], camera_info_msg->P[6]);
+  camera.reset(new dvo::core::RgbdCameraPyramid(
+      camera_info_msg->width, camera_info_msg->height, intrinsics));
   camera->build(tracker_cfg.getNumLevels());
 
   keyframe_tracker.reset(new KeyframeTracker(graph_vis_));
   keyframe_tracker->configureTracking(tracker_cfg);
   keyframe_tracker->configureKeyframeSelection(keyframe_tracker_cfg);
   keyframe_tracker->configureMapping(graph_cfg);
-  keyframe_tracker->addMapChangedCallback(boost::bind(&CameraKeyframeTracker::onMapChanged, this, _1));
+  keyframe_tracker->addMapChangedCallback(
+      boost::bind(&CameraKeyframeTracker::onMapChanged, this, _1));
 
   static RgbdImagePyramid* const __null__ = 0;
 
@@ -125,18 +135,24 @@ void CameraKeyframeTracker::reset(const sensor_msgs::CameraInfo::ConstPtr& camer
   vis_->reset();
 }
 
-void CameraKeyframeTracker::reset(const cv::Mat &img)
-{
-  //intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0], camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
-  intrinsics = IntrinsicMatrix::create(517.306408, 516.469215, 318.643040, 255.313989);
-  camera.reset(new dvo::core::RgbdCameraPyramid(img.cols, img.rows, intrinsics));
+void CameraKeyframeTracker::reset(const cv::Mat& img) {
+  // intrinsics = IntrinsicMatrix::create(camera_info_msg->K[0],
+  // camera_info_msg->K[4], camera_info_msg->K[2], camera_info_msg->K[5]);
+  //  intrinsics = IntrinsicMatrix::create(517.306408, 516.469215, 318.643040,
+  //  255.313989);
+  //    K: [525.0, 0.0, 319.5, 0.0, 525.0, 239.5, 0.0, 0.0, 1.0]
+  intrinsics =
+      IntrinsicMatrix::create(525.0, 525.0, 319.5, 239.5);
+  camera.reset(
+      new dvo::core::RgbdCameraPyramid(img.cols, img.rows, intrinsics));
   camera->build(tracker_cfg.getNumLevels());
 
   keyframe_tracker.reset(new KeyframeTracker(graph_vis_));
   keyframe_tracker->configureTracking(tracker_cfg);
   keyframe_tracker->configureKeyframeSelection(keyframe_tracker_cfg);
   keyframe_tracker->configureMapping(graph_cfg);
-  keyframe_tracker->addMapChangedCallback(boost::bind(&CameraKeyframeTracker::onMapChanged, this, _1));
+  keyframe_tracker->addMapChangedCallback(
+      boost::bind(&CameraKeyframeTracker::onMapChanged, this, _1));
 
   static RgbdImagePyramid* const __null__ = 0;
 
@@ -149,18 +165,14 @@ void CameraKeyframeTracker::reset(const cv::Mat &img)
   vis_->reset();
 }
 
-void CameraKeyframeTracker::handleTrackerConfig(dvo_ros::CameraDenseTrackerConfig& config, uint32_t level)
-{
-  if(level == 0) return;
+void CameraKeyframeTracker::handleTrackerConfig(
+    dvo_ros::CameraDenseTrackerConfig& config, uint32_t level) {
+  if (level == 0) return;
 
-  if(level & dvo_ros::CameraDenseTracker_RunDenseTracking)
-  {
-    if(config.run_dense_tracking)
-    {
+  if (level & dvo_ros::CameraDenseTracker_RunDenseTracking) {
+    if (config.run_dense_tracking) {
       startSynchronizedImageStream();
-    }
-    else
-    {
+    } else {
       stopSynchronizedImageStream();
 
       // force reset of tracker
@@ -169,24 +181,21 @@ void CameraKeyframeTracker::handleTrackerConfig(dvo_ros::CameraDenseTrackerConfi
     }
   }
 
-  if(!config.run_dense_tracking && config.use_dense_tracking_estimate)
-  {
+  if (!config.run_dense_tracking && config.use_dense_tracking_estimate) {
     config.use_dense_tracking_estimate = false;
   }
 
-  if(level & dvo_ros::CameraDenseTracker_ConfigParam)
-  {
+  if (level & dvo_ros::CameraDenseTracker_ConfigParam) {
     // fix config, so we don't die by accident
-    if(config.coarsest_level < config.finest_level)
-    {
+    if (config.coarsest_level < config.finest_level) {
       config.finest_level = config.coarsest_level;
     }
 
     dvo_ros::util::updateConfigFromDynamicReconfigure(config, tracker_cfg);
 
-    // we are called in the ctor as well, but at this point we don't have a tracker instance
-    if(keyframe_tracker)
-    {
+    // we are called in the ctor as well, but at this point we don't have a
+    // tracker instance
+    if (keyframe_tracker) {
       // lock tracker so we don't reconfigure it while it is running
       boost::mutex::scoped_lock lock(tracker_mutex_);
 
@@ -194,52 +203,47 @@ void CameraKeyframeTracker::handleTrackerConfig(dvo_ros::CameraDenseTrackerConfi
       camera->build(tracker_cfg.getNumLevels());
     }
 
-    //ROS_INFO_STREAM("reconfigured tracker, config ( " << tracker_cfg << " )");
+    // ROS_INFO_STREAM("reconfigured tracker, config ( " << tracker_cfg << "
+    // )");
   }
 
   vis_->reset();
 }
 
-void CameraKeyframeTracker::handleSlamConfig(dvo_slam::KeyframeSlamConfig& config, uint32_t level)
-{
-  dvo_slam::updateConfigFromDynamicReconfigure(config, keyframe_tracker_cfg, graph_cfg);
+void CameraKeyframeTracker::handleSlamConfig(
+    dvo_slam::KeyframeSlamConfig& config, uint32_t level) {
+  dvo_slam::updateConfigFromDynamicReconfigure(config, keyframe_tracker_cfg,
+                                               graph_cfg);
 
-  if(keyframe_tracker)
-  {
+  if (keyframe_tracker) {
     boost::mutex::scoped_lock lock(tracker_mutex_);
 
     keyframe_tracker->configureKeyframeSelection(keyframe_tracker_cfg);
     keyframe_tracker->configureMapping(graph_cfg);
 
-    if(config.graph_opt_final)
-    {
+    if (config.graph_opt_final) {
       config.graph_opt_final = false;
       keyframe_tracker->finish();
     }
   }
 
-  //ROS_INFO_STREAM("reconfigured SLAM system, frontend config ( " << keyframe_tracker_cfg << " ), backend config  ( " << graph_cfg << " )");
+  // ROS_INFO_STREAM("reconfigured SLAM system, frontend config ( " <<
+  // keyframe_tracker_cfg << " ), backend config  ( " << graph_cfg << " )");
 }
 
-
-void CameraKeyframeTracker::onMapChanged(dvo_slam::KeyframeGraph& map)
-{
-
+void CameraKeyframeTracker::onMapChanged(dvo_slam::KeyframeGraph& map) {
   dvo_slam::PoseStampedArray msg;
   dvo_slam::serialization::MessageSerializer serializer(msg);
   serializer.serialize(map);
 
   graph_publisher.publish(msg);
-
 }
 
 void CameraKeyframeTracker::handleImages(
     const sensor_msgs::Image::ConstPtr& rgb_image_msg,
     const sensor_msgs::Image::ConstPtr& depth_image_msg,
     const sensor_msgs::CameraInfo::ConstPtr& rgb_camera_info_msg,
-    const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg
-)
-{
+    const sensor_msgs::CameraInfo::ConstPtr& depth_camera_info_msg) {
   static stopwatch sw_callback("callback");
   sw_callback.start();
 
@@ -247,16 +251,15 @@ void CameraKeyframeTracker::handleImages(
   boost::mutex::scoped_lock lock(tracker_mutex_);
 
   // different size of rgb and depth image
-  if(depth_camera_info_msg->width != rgb_camera_info_msg->width || depth_camera_info_msg->height != rgb_camera_info_msg->height)
-  {
+  if (depth_camera_info_msg->width != rgb_camera_info_msg->width ||
+      depth_camera_info_msg->height != rgb_camera_info_msg->height) {
     ROS_WARN("RGB and depth image have different size!");
 
     return;
   }
 
   // something has changed
-  if(hasChanged(rgb_camera_info_msg))
-  {
+  if (hasChanged(rgb_camera_info_msg)) {
     ROS_WARN("RGB image size has changed, resetting tracker!");
 
     reset(rgb_camera_info_msg);
@@ -265,45 +268,37 @@ void CameraKeyframeTracker::handleImages(
   cv::Mat intensity, depth;
   cv::Mat rgb_in = cv_bridge::toCvShare(rgb_image_msg)->image;
 
-  if(rgb_in.channels() == 3)
-  {
+  if (rgb_in.channels() == 3) {
     cv::Mat tmp;
     cv::cvtColor(rgb_in, tmp, CV_BGR2GRAY, 1);
 
     tmp.convertTo(intensity, CV_32F);
-  }
-  else
-  {
+  } else {
     rgb_in.convertTo(intensity, CV_32F);
   }
 
   cv::Mat depth_in = cv_bridge::toCvShare(depth_image_msg)->image;
 
-  if(depth_in.type() == CV_16UC1)
-  {
+  if (depth_in.type() == CV_16UC1) {
     SurfacePyramid::convertRawDepthImageSse(depth_in, depth, 0.001);
-  }
-  else
-  {
+  } else {
     depth = depth_in;
   }
 
   reference.swap(current);
   current = camera->create(intensity, depth);
 
-  if(rgb_in.channels() == 3)
-  {
+  if (rgb_in.channels() == 3) {
     rgb_in.convertTo(current->level(0).rgb, CV_32FC3);
   }
 
   // time delay compensation TODO: use driver settings instead
   std_msgs::Header h = rgb_image_msg->header;
-  //h.stamp -= ros::Duration(0.05);
+  // h.stamp -= ros::Duration(0.05);
 
   static Eigen::Affine3d first;
 
-  if(!reference)
-  {
+  if (!reference) {
     accumulated_transform.setIdentity();
     keyframe_tracker->init(accumulated_transform);
 
@@ -319,14 +314,14 @@ void CameraKeyframeTracker::handleImages(
 
   sw_match.stopAndPrint();
 
-  //vis_->trajectory("estimate")->
+  // vis_->trajectory("estimate")->
   //    color(dvo::visualization::Color::red())
   //    .add(accumulated_transform);
 
-  vis_->camera("current")->
-      color(dvo::visualization::Color::red()).
-      update(current->level(0), accumulated_transform).
-      show(dvo::visualization::CameraVisualizer::ShowCamera);
+  vis_->camera("current")
+      ->color(dvo::visualization::Color::red())
+      .update(current->level(0), accumulated_transform)
+      .show(dvo::visualization::CameraVisualizer::ShowCamera);
 
   publishTransform(h, accumulated_transform, "base_link_estimate");
 
@@ -335,10 +330,8 @@ void CameraKeyframeTracker::handleImages(
 
 void CameraKeyframeTracker::handleImages(
     const sensor_msgs::Image::ConstPtr& rgb_image_msg,
-    const sensor_msgs::Image::ConstPtr& depth_image_msg
-)
-{
-//  ROS_INFO_STREAM("hello from handleImages");
+    const sensor_msgs::Image::ConstPtr& depth_image_msg) {
+  //  ROS_INFO_STREAM("hello from handleImages");
   static stopwatch sw_callback("callback");
   sw_callback.start();
 
@@ -350,16 +343,14 @@ void CameraKeyframeTracker::handleImages(
   cv::Mat depth_in = cv_bridge::toCvShare(depth_image_msg)->image;
 
   // different size of rgb and depth image
-  if(rgb_in.rows != depth_in.rows || rgb_in.cols != depth_in.cols)
-  {
+  if (rgb_in.rows != depth_in.rows || rgb_in.cols != depth_in.cols) {
     ROS_WARN("RGB and depth image have different size!");
 
     return;
   }
 
   // something has changed
-  if(hasChanged(rgb_in))
-  {
+  if (hasChanged(rgb_in)) {
     ROS_WARN("RGB image size has changed, resetting tracker!");
 
     reset(rgb_in);
@@ -367,43 +358,35 @@ void CameraKeyframeTracker::handleImages(
 
   cv::Mat intensity, depth;
 
-  if(rgb_in.channels() == 3)
-  {
+  if (rgb_in.channels() == 3) {
     cv::Mat tmp;
     cv::cvtColor(rgb_in, tmp, CV_BGR2GRAY, 1);
 
     tmp.convertTo(intensity, CV_32F);
-  }
-  else
-  {
+  } else {
     rgb_in.convertTo(intensity, CV_32F);
   }
 
-  if(depth_in.type() == CV_16UC1)
-  {
+  if (depth_in.type() == CV_16UC1) {
     SurfacePyramid::convertRawDepthImageSse(depth_in, depth, 0.001);
-  }
-  else
-  {
+  } else {
     depth = depth_in;
   }
 
   reference.swap(current);
   current = camera->create(intensity, depth);
 
-  if(rgb_in.channels() == 3)
-  {
+  if (rgb_in.channels() == 3) {
     rgb_in.convertTo(current->level(0).rgb, CV_32FC3);
   }
 
   // time delay compensation TODO: use driver settings instead
   std_msgs::Header h = rgb_image_msg->header;
-  //h.stamp -= ros::Duration(0.05);
+  // h.stamp -= ros::Duration(0.05);
 
   static Eigen::Affine3d first;
 
-  if(!reference)
-  {
+  if (!reference) {
     accumulated_transform.setIdentity();
     keyframe_tracker->init(accumulated_transform);
 
@@ -424,14 +407,15 @@ void CameraKeyframeTracker::handleImages(
 
   sw_match.stopAndPrint();
 
-  vis_->trajectory("estimate")->
-      color(dvo::visualization::Color::red())
+  vis_->trajectory("estimate")
+      ->color(dvo::visualization::Color::red())
       .add(accumulated_transform);
 
-  vis_->camera("current")->
-      color(dvo::visualization::Color::red()).
-      update(current->level(0), accumulated_transform).
-//      show(dvo::visualization::CameraVisualizer::ShowCamera);
+  vis_->camera("current")
+      ->color(dvo::visualization::Color::red())
+      .update(current->level(0), accumulated_transform)
+      .
+      //      show(dvo::visualization::CameraVisualizer::ShowCamera);
       show();
 
   publishTransform(h, accumulated_transform, "base_link_estimate");
@@ -439,8 +423,9 @@ void CameraKeyframeTracker::handleImages(
   sw_callback.stopAndPrint();
 }
 
-void CameraKeyframeTracker::publishTransform(const std_msgs::Header& header, const Eigen::Affine3d& transform, const std::string frame)
-{
+void CameraKeyframeTracker::publishTransform(const std_msgs::Header& header,
+                                             const Eigen::Affine3d& transform,
+                                             const std::string frame) {
   static tf::TransformBroadcaster tb;
 
   tf::StampedTransform tf_transform;
