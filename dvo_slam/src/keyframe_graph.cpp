@@ -134,8 +134,11 @@ class KeyframeGraphImpl {
   static const int FirstOdometryId = 1 << 30;
   KeyframeGraphImpl()
       : optimization_thread_shutdown_(false),
+        loop_thread_shutdown_(false),
         optimization_thread_(
             boost::bind(&KeyframeGraphImpl::execOptimization, this)),
+        loop_thread_(
+            boost::bind(&KeyframeGraphImpl::execLoop, this)),
         next_keyframe_id_(1),
         next_odometry_vertex_id_(FirstOdometryId),
         next_odometry_edge_id_(FirstOdometryId),
@@ -429,6 +432,10 @@ class KeyframeGraphImpl {
   typedef tbb::enumerable_thread_specific<ConstraintProposalValidatorPtr>
       ConstraintProposalValidatorPool;
 
+  void execLoop() {
+
+  }
+
   void execOptimization() {
     static dvo::util::stopwatch sw_nkf("new_kf", 10);
 
@@ -501,61 +508,13 @@ class KeyframeGraphImpl {
     // mylxiaoyi: detect features
     mCurrentKeyframe->detectFeatures();
     mCurrentKeyframe->mpORBvocabulary = mpVocabulary;
+    mCurrentKeyframe->mpMap = mpMap;
+    mCurrentKeyframe->mpKeyFrameDB = mpKeyFrameDB;
 
     // early abort
     if (keyframes_.size() == 1) {
-      //      keyframe->CreateInitMap();
       CreateInitMap(mCurrentKeyframe);
-      //      mLastKeyframe = mCurrentKeyframe;
       return;
-    }
-
-    sw_constraint.start();
-    // find possible constraints
-    constraint_search_->findPossibleConstraints(keyframes_, mCurrentKeyframe,
-                                                constraint_candidates);
-    sw_constraint.stopAndPrint();
-    std::cerr << "constraints to validate: " << constraint_candidates.size()
-              << std::endl;
-
-    sw_validation.start();
-    // validate constraints
-    validateKeyframeConstraintsParallel(constraint_candidates, mCurrentKeyframe,
-                                        constraints);
-
-    ROS_WARN_STREAM("adding " << constraints.size() << " new constraints");
-
-    sw_validation.stopAndPrint();
-    sw_insert.start();
-    // update graph
-    size_t max_distance =
-        static_cast<size_t>(insertNewKeyframeConstraints(constraints));
-    sw_insert.stopAndPrint();
-
-    if (max_distance >= cfg_.MinConstraintDistance) {
-      sw_opt.start();
-      // optimize
-      keyframegraph_.initializeOptimization();
-      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
-
-      if (cfg_.OptimizationRemoveOutliers) {
-        int removed =
-            removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
-
-        std::cout << "removed = " << removed << ", keyframegraph.size = "
-                  << keyframegraph_.vertices().size() << std::endl;
-
-        if (removed > 0) {
-          keyframegraph_.initializeOptimization();
-        }
-      }
-
-      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
-
-      //// update keyframe database
-      updateKeyframePosesFromGraph();
-
-      sw_opt.stopAndPrint();
     }
 
     if (mLastKeyframe) {
@@ -567,8 +526,6 @@ class KeyframeGraphImpl {
       if (nmatches < 20) {
         matcher.SearchByProjection(mCurrentKeyframe, mLastKeyframe, 30, false);
       }
-
-      std::cout << "nmatches = " << nmatches << std::endl;
 
       if (nmatches >= 20) {
         Optimizer::PoseOptimization(mCurrentKeyframe);
@@ -587,32 +544,6 @@ class KeyframeGraphImpl {
           }
         }
 
-//        std::cout << "pose1 = " << mLastKeyframe->pose().matrix() << std::endl;
-//        std::cout << "pose2 = " << mCurrentKeyframe->pose().matrix()
-//                  << std::endl;
-//        //      cv::Mat img1, img2;
-//        mLastKeyframe->image()->level(0).intensity.convertTo(img1, CV_8UC1);
-//        mCurrentKeyframe->image()->level(0).intensity.convertTo(img2, CV_8UC1);
-//        cv::drawKeypoints(img1, mLastKeyframe->mvKeys, img1);
-//        cv::drawKeypoints(img2, mCurrentKeyframe->mvKeys, img2);
-//        cv::imshow("img1", img1);
-//        cv::setMouseCallback("img1", &KeyframeGraphImpl::img1_mouse_cb, this);
-//        cv::imshow("img2", img2);
-//        cv::Mat img;
-//        std::vector<cv::DMatch> matches;
-//        for (size_t i = 0; i < mCurrentKeyframe->N; i++) {
-//          boost::shared_ptr<MapPoint> pMP = mCurrentKeyframe->mvpMapPoints[i];
-//          if (pMP && !mCurrentKeyframe->mvbOutlier[i]) {
-//            int queryIdx = pMP->GetObservations()[mLastKeyframe];
-//            matches.push_back(cv::DMatch(queryIdx, i, 0.0));
-//          }
-//        }
-//        std::cout << "matches.size = " << matches.size() << std::endl;
-//        cv::drawMatches(img1, mLastKeyframe->mvKeys, img2,
-//                        mCurrentKeyframe->mvKeys, matches, img);
-//        cv::imshow("matches", img);
-//        cv::waitKey(0);
-
         ProcessNewKeyFrame(mCurrentKeyframe);
 
         CreateMoreMapPoints(mCurrentKeyframe);
@@ -625,22 +556,26 @@ class KeyframeGraphImpl {
         bool mbAbortBA = false;
         Optimizer::LocalBundleAdjustment(mCurrentKeyframe, &mbAbortBA, mpMap);
 
+        // Check redundant local Keyframes
+        KeyFrameCulling(mCurrentKeyframe);
+
         updateKeyframePosesToGraph();
+
+        loop_keyframes_.push(mCurrentKeyframe);
       } else {
         std::cout << "nmatches is not enough" << std::endl;
-
-        //        bool bOK = Relocalization(keyframe);
-        //        if (bOK) std::cout << "relocalization" << std::endl;
       }
     }
 
-
     map_changed_(*me_);
-
-    //    mLastKeyframe = mCurrentKeyframe;
   }
 
   void CreateInitMap(KeyframePtr keyframe) {
+    // Insert KeyFrame in the map
+    mpMap->AddKeyFrame(keyframe);
+
+    keyframe->ComputeBoW();
+
     // Create MapPoints and asscoiate to KeyFrame
     for (int i = 0; i < keyframe->N; i++) {
       float z = keyframe->mvDepth[i];
@@ -657,13 +592,6 @@ class KeyframeGraphImpl {
         //        keyframe->mvpMapPoints[i] = pNewMP;
       }
     }
-
-    int counter = 0;
-    for (size_t i = 0; i < keyframe->mvpMapPoints.size(); i++) {
-      boost::shared_ptr<MapPoint> pMP = keyframe->mvpMapPoints[i];
-      if (pMP) counter++;
-    }
-    std::cout << "counter = " << counter << std::endl;
 
     cout << "New map created with " << mpMap->MapPointsInMap() << " points"
          << endl;
@@ -1509,6 +1437,69 @@ class KeyframeGraphImpl {
     //      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
   }
 
+  void KeyFrameCulling(KeyframePtr keyframe) {
+    // Check redundant keyframes (only local keyframes)
+    // A keyframe is considered redundant if the 90% of the MapPoints it sees,
+    // are seen
+    // in at least other 3 keyframes (in the same or finer scale)
+    // We only consider close stereo points
+    vector<boost::shared_ptr<Keyframe>> vpLocalKeyFrames =
+        keyframe->GetVectorCovisibleKeyFrames();
+
+    for (vector<boost::shared_ptr<Keyframe>>::iterator
+             vit = vpLocalKeyFrames.begin(),
+             vend = vpLocalKeyFrames.end();
+         vit != vend; vit++) {
+      boost::shared_ptr<Keyframe> pKF = *vit;
+      if (pKF->id() == 1) continue;
+      const vector<boost::shared_ptr<MapPoint>> vpMapPoints =
+          pKF->GetMapPointMatches();
+
+      int nObs = 3;
+      const int thObs = nObs;
+      int nRedundantObservations = 0;
+      int nMPs = 0;
+      for (size_t i = 0, iend = vpMapPoints.size(); i < iend; i++) {
+        boost::shared_ptr<MapPoint> pMP = vpMapPoints[i];
+        if (pMP) {
+          if (!pMP->isBad()) {
+            //            if (!mbMonocular) {
+            //              if (pKF->mvDepth[i] > pKF->mThDepth ||
+            //              pKF->mvDepth[i] < 0)
+            //                continue;
+            //            }
+
+            nMPs++;
+            if (pMP->Observations() > thObs) {
+              const int& scaleLevel = pKF->mvKeysUn[i].octave;
+              const map<boost::shared_ptr<Keyframe>, size_t> observations =
+                  pMP->GetObservations();
+              int nObs = 0;
+              for (map<boost::shared_ptr<Keyframe>, size_t>::const_iterator
+                       mit = observations.begin(),
+                       mend = observations.end();
+                   mit != mend; mit++) {
+                boost::shared_ptr<Keyframe> pKFi = mit->first;
+                if (pKFi == pKF) continue;
+                const int& scaleLeveli = pKFi->mvKeysUn[mit->second].octave;
+
+                if (scaleLeveli <= scaleLevel + 1) {
+                  nObs++;
+                  if (nObs >= thObs) break;
+                }
+              }
+              if (nObs >= thObs) {
+                nRedundantObservations++;
+              }
+            }
+          }
+        }
+      }
+
+      if (nRedundantObservations > 0.9 * nMPs) pKF->SetBadFlag();
+    }
+  }
+
   struct FindEdge {
     int id1, id2;
 
@@ -1699,8 +1690,11 @@ class KeyframeGraphImpl {
 
   KeyframePtr active_;
   tbb::concurrent_bounded_queue<LocalMap::Ptr> new_keyframes_;
+  tbb::concurrent_bounded_queue<KeyframePtr> loop_keyframes_;
   bool optimization_thread_shutdown_;
+  bool loop_thread_shutdown_;
   tbb::tbb_thread optimization_thread_;
+  tbb::tbb_thread loop_thread_;
   tbb::mutex new_keyframe_sync_, queue_empty_sync_;
   KeyframeConstraintSearchInterfacePtr constraint_search_;
   KeyframeVector keyframes_;

@@ -21,6 +21,8 @@
 
 #include <dvo_slam/keyframe.h>
 #include <dvo_slam/mappoint.h>
+#include <dvo_slam/Map.h>
+#include <dvo_slam/KeyFrameDatabase.h>
 
 namespace dvo_slam {
 
@@ -112,9 +114,9 @@ void Keyframe::ComputeStereoFromRGBD(const cv::Mat& imDepth) {
     if (d > 0) {
       mvDepth[i] = d;
       mvuRight[i] = kpU.pt.x - mbf / d;
-//      std::cout << "d = " << d << ", x = " << kpU.pt.x
-//                << ", right = " << mvuRight[i] << ", mbf = " << mbf
-//                << std::endl;
+      //      std::cout << "d = " << d << ", x = " << kpU.pt.x
+      //                << ", right = " << mvuRight[i] << ", mbf = " << mbf
+      //                << std::endl;
     }
   }
 }
@@ -471,6 +473,132 @@ Eigen::Vector3d Keyframe::GetCameraCenter() {
   Eigen::Affine3d pose_cw = pose_wc.inverse();
   Eigen::Vector3d Ow = -pose_wc.rotation() * pose_cw.translation();
   return Ow;
+}
+
+void Keyframe::SetBadFlag() {
+  {
+    //    unique_lock<mutex> lock(mMutexConnections);
+    if (id() == 0)
+      return;
+    else if (mbNotErase) {
+      mbToBeErased = true;
+      return;
+    }
+  }
+
+  for (map<boost::shared_ptr<Keyframe>, int>::iterator
+           mit = mConnectedKeyFrameWeights.begin(),
+           mend = mConnectedKeyFrameWeights.end();
+       mit != mend; mit++)
+    mit->first->EraseConnection(shared_from_this());
+
+  for (size_t i = 0; i < mvpMapPoints.size(); i++)
+    if (mvpMapPoints[i]) mvpMapPoints[i]->EraseObservation(shared_from_this());
+  {
+    //    unique_lock<mutex> lock(mMutexConnections);
+    //    unique_lock<mutex> lock1(mMutexFeatures);
+
+    mConnectedKeyFrameWeights.clear();
+    mvpOrderedConnectedKeyFrames.clear();
+
+    // Update Spanning Tree
+    set<boost::shared_ptr<Keyframe>> sParentCandidates;
+    sParentCandidates.insert(mpParent);
+
+    // Assign at each iteration one children with a parent (the pair with
+    // highest covisibility weight)
+    // Include that children as new parent candidate for the rest
+    while (!mspChildrens.empty()) {
+      bool bContinue = false;
+
+      int max = -1;
+      boost::shared_ptr<Keyframe> pC;
+      boost::shared_ptr<Keyframe> pP;
+
+      for (set<boost::shared_ptr<Keyframe>>::iterator
+               sit = mspChildrens.begin(),
+               send = mspChildrens.end();
+           sit != send; sit++) {
+        boost::shared_ptr<Keyframe> pKF = *sit;
+        if (pKF->isBad()) continue;
+
+        // Check if a parent candidate is connected to the keyframe
+        vector<boost::shared_ptr<Keyframe>> vpConnected =
+            pKF->GetVectorCovisibleKeyFrames();
+        for (size_t i = 0, iend = vpConnected.size(); i < iend; i++) {
+          for (set<boost::shared_ptr<Keyframe>>::iterator
+                   spcit = sParentCandidates.begin(),
+                   spcend = sParentCandidates.end();
+               spcit != spcend; spcit++) {
+            if (vpConnected[i]->id() == (*spcit)->id()) {
+              int w = pKF->GetWeight(vpConnected[i]);
+              if (w > max) {
+                pC = pKF;
+                pP = vpConnected[i];
+                max = w;
+                bContinue = true;
+              }
+            }
+          }
+        }
+      }
+
+      if (bContinue) {
+        pC->ChangeParent(pP);
+        sParentCandidates.insert(pC);
+        mspChildrens.erase(pC);
+      } else
+        break;
+    }
+
+    // If a children has no covisibility links with any parent candidate, assign
+    // to the original parent of this KF
+    if (!mspChildrens.empty())
+      for (set<boost::shared_ptr<Keyframe>>::iterator sit =
+               mspChildrens.begin();
+           sit != mspChildrens.end(); sit++) {
+        (*sit)->ChangeParent(mpParent);
+      }
+
+    mpParent->EraseChild(shared_from_this());
+    //    mTcp = Tcw * mpParent->GetPoseInverse();
+    mbBad = true;
+  }
+
+  mpMap->EraseKeyFrame(shared_from_this());
+  mpKeyFrameDB->erase(shared_from_this());
+}
+
+void Keyframe::EraseConnection(boost::shared_ptr<Keyframe> pKF) {
+  bool bUpdate = false;
+  {
+    //        unique_lock<mutex> lock(mMutexConnections);
+    if (mConnectedKeyFrameWeights.count(pKF)) {
+      mConnectedKeyFrameWeights.erase(pKF);
+      bUpdate = true;
+    }
+  }
+
+  if (bUpdate) UpdateBestCovisibles();
+}
+
+int Keyframe::GetWeight(boost::shared_ptr<Keyframe> pKF) {
+  //  unique_lock<mutex> lock(mMutexConnections);
+  if (mConnectedKeyFrameWeights.count(pKF))
+    return mConnectedKeyFrameWeights[pKF];
+  else
+    return 0;
+}
+
+void Keyframe::ChangeParent(boost::shared_ptr<Keyframe> pKF) {
+  //  unique_lock<mutex> lockCon(mMutexConnections);
+  mpParent = pKF;
+  pKF->AddChild(shared_from_this());
+}
+
+void Keyframe::EraseChild(boost::shared_ptr<Keyframe> pKF) {
+//  unique_lock<mutex> lockCon(mMutexConnections);
+  mspChildrens.erase(pKF);
 }
 
 } /* namespace dvo_slam */

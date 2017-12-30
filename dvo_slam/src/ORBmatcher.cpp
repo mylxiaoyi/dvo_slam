@@ -1308,8 +1308,6 @@ int ORBmatcher::SearchByProjection(KeyframePtr &CurrentFrame,
     }
   }
 
-  std::cout << "counter = " << counter << ", counter2 = " << counter2
-            << ", nmatches = " << nmatches << std::endl;
   // Apply rotation consistency
   if (mbCheckOrientation) {
     int ind1 = -1;

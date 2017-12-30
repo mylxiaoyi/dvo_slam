@@ -44,13 +44,20 @@ namespace dvo_slam {
 #define FRAME_GRID_COLS 64
 
 class MapPoint;
+class Map;
+class KeyframeDatabase;
 
 typedef DBoW2::TemplatedVocabulary<DBoW2::FORB::TDescriptor, DBoW2::FORB>
     ORBVocabulary;
 
 class Keyframe : public boost::enable_shared_from_this<Keyframe> {
  public:
-  Keyframe() : id_(-1), mbBad(false), mbFirstConnection(true){};
+  Keyframe()
+      : id_(-1),
+        mbFirstConnection(true),
+        mbNotErase(false),
+        mbToBeErased(false),
+        mbBad(false){};
   virtual ~Keyframe(){};
 
   FI_ATTRIBUTE(Keyframe, unsigned long int, id)
@@ -98,8 +105,6 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   std::set<boost::shared_ptr<Keyframe>> mspChildrens;
   std::set<boost::shared_ptr<Keyframe>> mspLoopEdges;
 
-  bool mbBad;
-
   static float fx;
   static float fy;
   static float cx;
@@ -131,6 +136,14 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   long unsigned int mnRelocQuery;
   int mnRelocWords;
   float mRelocScore;
+
+  // Bad flags
+  bool mbNotErase;
+  bool mbToBeErased;
+  bool mbBad;
+
+  boost::shared_ptr<Map> mpMap;
+  boost::shared_ptr<KeyframeDatabase> mpKeyFrameDB;
 
   void detectFeatures();
 
@@ -191,9 +204,15 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   std::set<boost::shared_ptr<Keyframe>> GetConnectedKeyFrames();
 
   void UndistortKeyPoints();
-  void ComputeImageBounds(const cv::Mat &imLeft);
+  void ComputeImageBounds(const cv::Mat& imLeft);
 
   Eigen::Vector3d GetCameraCenter();
+
+  void SetBadFlag();
+  void EraseConnection(boost::shared_ptr<Keyframe> pKF);
+  int GetWeight(boost::shared_ptr<Keyframe> pKF);
+  void ChangeParent(boost::shared_ptr<Keyframe> pKF);
+  void EraseChild(boost::shared_ptr<Keyframe> pKF);
 };
 
 typedef boost::shared_ptr<Keyframe> KeyframePtr;
