@@ -75,14 +75,14 @@ CameraKeyframeTracker::CameraKeyframeTracker(ros::NodeHandle& nh,
 
   accumulated_transform.setIdentity();
 
-//  rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
-//      nh, "camera/rgb/image_color", 1);
-//  depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
-//      nh, "camera/depth/image", 1);
   rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
-      nh, "camera/rgb/image_raw", 1);
+      nh, "camera/rgb/image_color", 1);
   depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
-      nh, "camera/depth/image_raw", 1);
+      nh, "camera/depth/image", 1);
+//  rgb_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+//      nh, "camera/rgb/image_raw", 1);
+//  depth_image_subscriber_ = new message_filters::Subscriber<sensor_msgs::Image>(
+//      nh, "camera/depth/image_raw", 1);
 
   my_synchronizer_ =
       new message_filters::Synchronizer<MyRGBDWithCameraInfoPolicy>(

@@ -19,10 +19,10 @@
  *  along with dvo.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <dvo_slam/KeyFrameDatabase.h>
+#include <dvo_slam/Map.h>
 #include <dvo_slam/keyframe.h>
 #include <dvo_slam/mappoint.h>
-#include <dvo_slam/Map.h>
-#include <dvo_slam/KeyFrameDatabase.h>
 
 namespace dvo_slam {
 
@@ -43,13 +43,10 @@ float Keyframe::mfGridElementWidthInv = 1.0;
 
 void Keyframe::detectFeatures() {
   ORBextractor extractor(1000, 1.2, 8, 20, 7);
-  //  cv::Ptr<cv::ORB> orb = cv::ORB::create(1000);
+
   cv::Mat img;
   image()->level(0).intensity.convertTo(img, CV_8UC1);
   extractor(img, cv::Mat(), mvKeys, mDescriptors);
-  //  orb->detectAndCompute(img, cv::Mat(), mvKeys, mDescriptors);
-  //  orb->detect(img, mvKeys);
-  //  orb->compute(img, mvKeys, mDescriptors);
 
   N = mvKeys.size();
   if (mvKeys.empty()) return;
@@ -63,6 +60,25 @@ void Keyframe::detectFeatures() {
   mvLevelSigma2 = extractor.GetScaleSigmaSquares();
   mvInvLevelSigma2 = extractor.GetInverseScaleSigmaSquares();
 
+  if (mbInitialComputations) {
+    const dvo::core::RgbdCamera& camera = image()->level(0).camera();
+    fx = camera.intrinsics().fx();
+    fy = camera.intrinsics().fy();
+    cx = camera.intrinsics().ox();
+    cy = camera.intrinsics().oy();
+    invfx = 1.0f / fx;
+    invfy = 1.0f / fy;
+
+    ComputeImageBounds(img);
+
+    mfGridElementWidthInv =
+        static_cast<float>(FRAME_GRID_COLS) / (mnMaxX - mnMinX);
+    mfGridElementHeightInv =
+        static_cast<float>(FRAME_GRID_ROWS) / (mnMaxY - mnMinY);
+
+    mbInitialComputations = false;
+  }
+
   UndistortKeyPoints();
 
   mbf = 40.0;
@@ -72,30 +88,13 @@ void Keyframe::detectFeatures() {
   mvpMapPoints = std::vector<boost::shared_ptr<MapPoint>>(N, nullptr);
   mvbOutlier = std::vector<bool>(N, false);
 
-  if (mbInitialComputations) {
-    ComputeImageBounds(img);
-
-    mfGridElementWidthInv =
-        static_cast<float>(FRAME_GRID_COLS) / (mnMaxX - mnMinX);
-    mfGridElementHeightInv =
-        static_cast<float>(FRAME_GRID_ROWS) / (mnMaxY - mnMinY);
-
-    const dvo::core::RgbdCamera& camera = image()->level(0).camera();
-    fx = camera.intrinsics().fx();
-    fy = camera.intrinsics().fy();
-    cx = camera.intrinsics().ox();
-    cy = camera.intrinsics().oy();
-    invfx = 1.0f / fx;
-    invfy = 1.0f / fy;
-
-    mbInitialComputations = false;
-  }
-
   mb = mbf / fx;
 
   mThDepth = mbf * 40.0 / fx;
 
   AssignFeaturesToGrid();
+
+  mK << fx, 0, cx, 0, fy, cy, 0, 0, 1;
 }
 
 void Keyframe::ComputeStereoFromRGBD(const cv::Mat& imDepth) {
@@ -459,13 +458,97 @@ std::set<boost::shared_ptr<Keyframe>> Keyframe::GetConnectedKeyFrames() {
   return s;
 }
 
-void Keyframe::UndistortKeyPoints() { mvKeysUn = mvKeys; }
+void Keyframe::UndistortKeyPoints() {
+  /*
+    Camera.k1: 0.262383
+    Camera.k2: -0.953104
+    Camera.p1: -0.005358
+    Camera.p2: 0.002628
+    Camera.k3: 1.163314
+   */
+  cv::Mat DistCoef(4, 1, CV_32F);
+//  DistCoef.at<float>(0) = 0.0;
+  DistCoef.at<float>(0) = 0.262383;
+  DistCoef.at<float>(1) = -0.953104;
+  DistCoef.at<float>(2) = -0.005358;
+  DistCoef.at<float>(3) = 0.002628;
+  DistCoef.at<float>(4) = 1.163314;
+
+  cv::Mat K = cv::Mat::eye(3, 3, CV_32F);
+  K.at<float>(0, 0) = fx;
+  K.at<float>(1, 1) = fy;
+  K.at<float>(0, 2) = cx;
+  K.at<float>(1, 2) = cy;
+
+  if (DistCoef.at<float>(0) == 0.0) {
+    mvKeysUn = mvKeys;
+    return;
+  }
+
+  // Fill matrix with points
+  cv::Mat mat(N, 2, CV_32F);
+  for (int i = 0; i < N; i++) {
+    mat.at<float>(i, 0) = mvKeys[i].pt.x;
+    mat.at<float>(i, 1) = mvKeys[i].pt.y;
+  }
+
+  // Undistort points
+  mat = mat.reshape(2);
+  cv::undistortPoints(mat, mat, K, DistCoef, cv::Mat(), K);
+  mat = mat.reshape(1);
+
+  // Fill undistorted keypoint vector
+  mvKeysUn.resize(N);
+  for (int i = 0; i < N; i++) {
+    cv::KeyPoint kp = mvKeys[i];
+    kp.pt.x = mat.at<float>(i, 0);
+    kp.pt.y = mat.at<float>(i, 1);
+    mvKeysUn[i] = kp;
+  }
+}
 
 void Keyframe::ComputeImageBounds(const cv::Mat& imLeft) {
-  mnMinX = 0.0f;
-  mnMaxX = imLeft.cols;
-  mnMinY = 0.0f;
-  mnMaxY = imLeft.rows;
+  cv::Mat DistCoef(4, 1, CV_32F);
+//  DistCoef.at<float>(0) = 0.0;
+  DistCoef.at<float>(0) = 0.262383;
+  DistCoef.at<float>(1) = -0.953104;
+  DistCoef.at<float>(2) = -0.005358;
+  DistCoef.at<float>(3) = 0.002628;
+  DistCoef.at<float>(4) = 1.163314;
+
+  cv::Mat K = cv::Mat::eye(3, 3, CV_32F);
+  K.at<float>(0, 0) = fx;
+  K.at<float>(1, 1) = fy;
+  K.at<float>(0, 2) = cx;
+  K.at<float>(1, 2) = cy;
+
+  if (DistCoef.at<float>(0) != 0.0) {
+    cv::Mat mat(4, 2, CV_32F);
+    mat.at<float>(0, 0) = 0.0;
+    mat.at<float>(0, 1) = 0.0;
+    mat.at<float>(1, 0) = imLeft.cols;
+    mat.at<float>(1, 1) = 0.0;
+    mat.at<float>(2, 0) = 0.0;
+    mat.at<float>(2, 1) = imLeft.rows;
+    mat.at<float>(3, 0) = imLeft.cols;
+    mat.at<float>(3, 1) = imLeft.rows;
+
+    // Undistort corners
+    mat = mat.reshape(2);
+    cv::undistortPoints(mat, mat, K, DistCoef, cv::Mat(), K);
+    mat = mat.reshape(1);
+
+    mnMinX = min(mat.at<float>(0, 0), mat.at<float>(2, 0));
+    mnMaxX = max(mat.at<float>(1, 0), mat.at<float>(3, 0));
+    mnMinY = min(mat.at<float>(0, 1), mat.at<float>(1, 1));
+    mnMaxY = max(mat.at<float>(2, 1), mat.at<float>(3, 1));
+
+  } else {
+    mnMinX = 0.0f;
+    mnMaxX = imLeft.cols;
+    mnMinY = 0.0f;
+    mnMaxY = imLeft.rows;
+  }
 }
 
 Eigen::Vector3d Keyframe::GetCameraCenter() {
@@ -597,8 +680,83 @@ void Keyframe::ChangeParent(boost::shared_ptr<Keyframe> pKF) {
 }
 
 void Keyframe::EraseChild(boost::shared_ptr<Keyframe> pKF) {
-//  unique_lock<mutex> lockCon(mMutexConnections);
+  //  unique_lock<mutex> lockCon(mMutexConnections);
   mspChildrens.erase(pKF);
+}
+
+void Keyframe::SetNotErase() {
+  //    unique_lock<mutex> lock(mMutexConnections);
+  mbNotErase = true;
+}
+
+void Keyframe::SetErase() {
+  {
+    //    unique_lock<mutex> lock(mMutexConnections);
+    if (mspLoopEdges.empty()) {
+      mbNotErase = false;
+    }
+  }
+
+  if (mbToBeErased) {
+    SetBadFlag();
+  }
+}
+
+set<boost::shared_ptr<MapPoint>> Keyframe::GetMapPoints() {
+  //    unique_lock<mutex> lock(mMutexFeatures);
+  set<boost::shared_ptr<MapPoint>> s;
+  for (size_t i = 0, iend = mvpMapPoints.size(); i < iend; i++) {
+    if (!mvpMapPoints[i]) continue;
+    boost::shared_ptr<MapPoint> pMP = mvpMapPoints[i];
+    if (!pMP->isBad()) s.insert(pMP);
+  }
+  return s;
+}
+
+set<boost::shared_ptr<Keyframe>> Keyframe::GetLoopEdges() {
+  //    unique_lock<mutex> lockCon(mMutexConnections);
+  return mspLoopEdges;
+}
+
+vector<boost::shared_ptr<Keyframe>> Keyframe::GetCovisiblesByWeight(
+    const int& w) {
+  //  unique_lock<mutex> lock(mMutexConnections);
+
+  if (mvpOrderedConnectedKeyFrames.empty())
+    return vector<boost::shared_ptr<Keyframe>>();
+
+  vector<int>::iterator it =
+      upper_bound(mvOrderedWeights.begin(), mvOrderedWeights.end(), w,
+                  Keyframe::weightComp);
+  if (it == mvOrderedWeights.end())
+    return vector<boost::shared_ptr<Keyframe>>();
+  else {
+    int n = it - mvOrderedWeights.begin();
+    return vector<boost::shared_ptr<Keyframe>>(
+        mvpOrderedConnectedKeyFrames.begin(),
+        mvpOrderedConnectedKeyFrames.begin() + n);
+  }
+}
+
+bool Keyframe::hasChild(boost::shared_ptr<Keyframe> pKF) {
+  //  unique_lock<mutex> lockCon(mMutexConnections);
+  return mspChildrens.count(pKF);
+}
+
+boost::shared_ptr<Keyframe> Keyframe::GetParent() {
+  //  unique_lock<mutex> lockCon(mMutexConnections);
+  return mpParent;
+}
+
+void Keyframe::AddLoopEdge(boost::shared_ptr<Keyframe> pKF) {
+  //  unique_lock<mutex> lockCon(mMutexConnections);
+  mbNotErase = true;
+  mspLoopEdges.insert(pKF);
+}
+
+set<boost::shared_ptr<Keyframe>> Keyframe::GetChilds() {
+  //  unique_lock<mutex> lockCon(mMutexConnections);
+  return mspChildrens;
 }
 
 } /* namespace dvo_slam */

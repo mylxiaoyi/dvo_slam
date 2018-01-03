@@ -66,6 +66,8 @@ public:
 
   const g2o::SparseOptimizer& graph() const;
 
+  const boost::shared_ptr<Map> map() const;
+
   cv::Mat computeIntensityErrorImage(int edge_id, bool use_measurement = true) const;
 
   void debugLoopClosureConstraint(int keyframe1, int keyframe2) const;

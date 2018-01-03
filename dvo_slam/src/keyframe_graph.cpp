@@ -29,6 +29,7 @@
 #include <dvo_slam/constraints/constraint_proposal_voter.h>
 
 #include <dvo_slam/KeyFrameDatabase.h>
+#include <dvo_slam/LoopClosing.h>
 #include <dvo_slam/Map.h>
 #include <dvo_slam/ORBmatcher.h>
 #include <dvo_slam/Optimizer.h>
@@ -134,11 +135,8 @@ class KeyframeGraphImpl {
   static const int FirstOdometryId = 1 << 30;
   KeyframeGraphImpl()
       : optimization_thread_shutdown_(false),
-        loop_thread_shutdown_(false),
         optimization_thread_(
             boost::bind(&KeyframeGraphImpl::execOptimization, this)),
-        loop_thread_(
-            boost::bind(&KeyframeGraphImpl::execLoop, this)),
         next_keyframe_id_(1),
         next_odometry_vertex_id_(FirstOdometryId),
         next_odometry_edge_id_(FirstOdometryId),
@@ -160,7 +158,10 @@ class KeyframeGraphImpl {
       std::cout << "load voc file successfuly" << std::endl;
     mpKeyFrameDB = boost::make_shared<dvo_slam::KeyframeDatabase>(mpVocabulary);
 
-    mpMatcher = cv::BFMatcher::create();
+    mpLoopClosing = boost::make_shared<dvo_slam::LoopClosing>(
+        mpMap, mpKeyFrameDB, mpVocabulary, true);
+    loop_thread_ = tbb::tbb_thread(
+        boost::bind(&dvo_slam::LoopClosing::execLoop, mpLoopClosing.get()));
   }
 
   ~KeyframeGraphImpl() {
@@ -225,7 +226,37 @@ class KeyframeGraphImpl {
     return result;
   }
 
+  //  void finalOptimization() {
+  //    while (new_keyframes_.size() > 0) {
+  //      std::cout << "waiting to process new_keyframes_.size = "
+  //                << new_keyframes_.size() << std::endl;
+  //      usleep(3000);
+  //    }
+  //    std::cout << "exec final optimization" << std::endl;
+  //    bool bStopFlag = false;
+  //    Optimizer::GlobalBundleAdjustemnt(mpMap, 10, &bStopFlag, 0, true);
+
+  //    std::cerr << "done" << std::endl;
+
+  //    // update keyframe database
+  //    //    updateKeyframePosesFromGraph();
+
+  //    map_changed_(*me_);
+
+  //    std::cerr << keyframes_.size() << " keyframes" << std::endl;
+  //  }
+
   void finalOptimization() {
+    while (new_keyframes_.size() > 0) {
+      std::cout << "waiting to process new_keyframes_.size = "
+                << new_keyframes_.size() << std::endl;
+      usleep(3000);
+    }
+
+    //    bool bStopFlag = false;
+    //    Optimizer::GlobalBundleAdjustemnt(mpMap, 10, &bStopFlag, 0, true);
+    //    updateKeyframePosesToGraph();
+
     tbb::mutex::scoped_lock l;
     std::cerr << "final optimization, waiting for all keyframes";
     while (!l.try_acquire(queue_empty_sync_)) {
@@ -298,6 +329,9 @@ class KeyframeGraphImpl {
 
     // update keyframe database
     updateKeyframePosesFromGraph();
+
+    bool bStopFlag = false;
+    Optimizer::GlobalBundleAdjustemnt(mpMap, 10, &bStopFlag, 0, true);
 
     map_changed_(*me_);
 
@@ -432,10 +466,6 @@ class KeyframeGraphImpl {
   typedef tbb::enumerable_thread_specific<ConstraintProposalValidatorPtr>
       ConstraintProposalValidatorPool;
 
-  void execLoop() {
-
-  }
-
   void execOptimization() {
     static dvo::util::stopwatch sw_nkf("new_kf", 10);
 
@@ -527,11 +557,13 @@ class KeyframeGraphImpl {
         matcher.SearchByProjection(mCurrentKeyframe, mLastKeyframe, 30, false);
       }
 
+      //      std::cout << "nmatches = " << nmatches << std::endl;
+
       if (nmatches >= 20) {
         Optimizer::PoseOptimization(mCurrentKeyframe);
-        g2o::VertexSE3* vertex =
-            (g2o::VertexSE3*)keyframegraph_.vertex(mCurrentKeyframe->id());
-        vertex->setEstimate(toIsometry(mCurrentKeyframe->pose()));
+        //        g2o::VertexSE3* vertex =
+        //            (g2o::VertexSE3*)keyframegraph_.vertex(mCurrentKeyframe->id());
+        //        vertex->setEstimate(toIsometry(mCurrentKeyframe->pose()));
 
         // discards outliers
         for (size_t i = 0; i < mCurrentKeyframe->N; i++) {
@@ -546,6 +578,7 @@ class KeyframeGraphImpl {
 
         ProcessNewKeyFrame(mCurrentKeyframe);
 
+        // use depth to create more map points
         CreateMoreMapPoints(mCurrentKeyframe);
 
         // Triangulate new MapPoints
@@ -556,15 +589,64 @@ class KeyframeGraphImpl {
         bool mbAbortBA = false;
         Optimizer::LocalBundleAdjustment(mCurrentKeyframe, &mbAbortBA, mpMap);
 
+        //        g2o::VertexSE3* vertex =
+        //            (g2o::VertexSE3*)keyframegraph_.vertex(mCurrentKeyframe->id());
+        //        vertex->setEstimate(toIsometry(mCurrentKeyframe->pose()));
+
         // Check redundant local Keyframes
-        KeyFrameCulling(mCurrentKeyframe);
+        //        KeyFrameCulling(mCurrentKeyframe);
 
         updateKeyframePosesToGraph();
 
-        loop_keyframes_.push(mCurrentKeyframe);
+        mpLoopClosing->InsertKeyFrame(mCurrentKeyframe);
       } else {
         std::cout << "nmatches is not enough" << std::endl;
       }
+    }
+
+    sw_constraint.start();
+    // find possible constraints
+    constraint_search_->findPossibleConstraints(keyframes_, mCurrentKeyframe,
+                                                constraint_candidates);
+    sw_constraint.stopAndPrint();
+    // std::cerr << "constraints to validate: " << constraint_candidates.size()
+    // << std::endl;
+
+    sw_validation.start();
+    // validate constraints
+    validateKeyframeConstraintsParallel(constraint_candidates, mCurrentKeyframe,
+                                        constraints);
+
+    ROS_WARN_STREAM("adding " << constraints.size() << " new constraints");
+
+    sw_validation.stopAndPrint();
+    sw_insert.start();
+    // update graph
+    size_t max_distance =
+        static_cast<size_t>(insertNewKeyframeConstraints(constraints));
+    sw_insert.stopAndPrint();
+
+    if (max_distance >= cfg_.MinConstraintDistance) {
+      sw_opt.start();
+      // optimize
+      keyframegraph_.initializeOptimization();
+      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+
+      if (cfg_.OptimizationRemoveOutliers) {
+        int removed =
+            removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
+
+        if (removed > 0) {
+          keyframegraph_.initializeOptimization();
+        }
+      }
+
+      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+
+      //// update keyframe database
+      updateKeyframePosesFromGraph();
+
+      sw_opt.stopAndPrint();
     }
 
     map_changed_(*me_);
@@ -1422,19 +1504,19 @@ class KeyframeGraphImpl {
       vertex->setEstimate(toIsometry(keyframe->pose()));
     }
 
-    //      keyframegraph_.initializeOptimization();
-    //      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
-
-    //      if (cfg_.OptimizationRemoveOutliers) {
-    //        int removed =
-    //            removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
-
-    //        if (removed > 0) {
     //          keyframegraph_.initializeOptimization();
-    //        }
-    //      }
+    //          keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
 
-    //      keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
+    //          if (cfg_.OptimizationRemoveOutliers) {
+    //            int removed =
+    //                removeOutlierConstraints(cfg_.OptimizationOutlierWeightThreshold);
+
+    //            if (removed > 0) {
+    //              keyframegraph_.initializeOptimization();
+    //            }
+    //          }
+
+    //          keyframegraph_.optimize(cfg_.OptimizationIterations / 2);
   }
 
   void KeyFrameCulling(KeyframePtr keyframe) {
@@ -1468,6 +1550,9 @@ class KeyframeGraphImpl {
             //              pKF->mvDepth[i] < 0)
             //                continue;
             //            }
+
+            if (pKF->mvDepth[i] > pKF->mThDepth || pKF->mvDepth[i] < 0)
+              continue;
 
             nMPs++;
             if (pMP->Observations() > thObs) {
@@ -1690,11 +1775,8 @@ class KeyframeGraphImpl {
 
   KeyframePtr active_;
   tbb::concurrent_bounded_queue<LocalMap::Ptr> new_keyframes_;
-  tbb::concurrent_bounded_queue<KeyframePtr> loop_keyframes_;
   bool optimization_thread_shutdown_;
-  bool loop_thread_shutdown_;
   tbb::tbb_thread optimization_thread_;
-  tbb::tbb_thread loop_thread_;
   tbb::mutex new_keyframe_sync_, queue_empty_sync_;
   KeyframeConstraintSearchInterfacePtr constraint_search_;
   KeyframeVector keyframes_;
@@ -1717,13 +1799,14 @@ class KeyframeGraphImpl {
   boost::shared_ptr<Map> mpMap;
   boost::shared_ptr<dvo_slam::ORBVocabulary> mpVocabulary;
   boost::shared_ptr<dvo_slam::KeyframeDatabase> mpKeyFrameDB;
+  boost::shared_ptr<dvo_slam::LoopClosing> mpLoopClosing;
 
   unsigned long int mnLastRelocFrameId;
 
-  cv::Ptr<cv::BFMatcher> mpMatcher;
-
   dvo_slam::KeyframePtr mLastKeyframe;
   dvo_slam::KeyframePtr mCurrentKeyframe;
+
+  tbb::tbb_thread loop_thread_;
 };
 cv::Mat KeyframeGraphImpl::img1 = cv::Mat();
 cv::Mat KeyframeGraphImpl::img2 = cv::Mat();
@@ -1770,6 +1853,8 @@ void KeyframeGraph::debugLoopClosureConstraint(int keyframe1,
 const g2o::SparseOptimizer& KeyframeGraph::graph() const {
   return impl_->keyframegraph_;
 }
+
+const boost::shared_ptr<Map> KeyframeGraph::map() const { return impl_->mpMap; }
 
 const KeyframeVector& KeyframeGraph::keyframes() const {
   return impl_->keyframes_;

@@ -68,6 +68,10 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   ros::Time timestamp() const { return ros::Time(image()->timestamp()); }
 
+  static bool lId(boost::shared_ptr<Keyframe> pKF1, boost::shared_ptr<Keyframe> pKF2) {
+    return pKF1->id() < pKF2->id();
+  }
+
   size_t N;
   std::vector<cv::KeyPoint> mvKeys;
   std::vector<cv::KeyPoint> mvKeysUn;
@@ -112,6 +116,8 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   static float invfx;
   static float invfy;
 
+  Eigen::Matrix<double, 3, 3> mK;
+
   float mbf, mb;
   float mThDepth;
 
@@ -144,6 +150,11 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
 
   boost::shared_ptr<Map> mpMap;
   boost::shared_ptr<KeyframeDatabase> mpKeyFrameDB;
+
+  // Variables used by loop closing
+  Eigen::Affine3d mTcwGBA;
+  Eigen::Affine3d mTcwBefGBA;
+  long unsigned int mnBAGlobalForKF;
 
   void detectFeatures();
 
@@ -213,6 +224,18 @@ class Keyframe : public boost::enable_shared_from_this<Keyframe> {
   int GetWeight(boost::shared_ptr<Keyframe> pKF);
   void ChangeParent(boost::shared_ptr<Keyframe> pKF);
   void EraseChild(boost::shared_ptr<Keyframe> pKF);
+  void SetNotErase();
+  void SetErase();
+
+  set<boost::shared_ptr<MapPoint>> GetMapPoints();
+
+  static bool weightComp(int a, int b) { return a > b; }
+  vector<boost::shared_ptr<Keyframe>> GetCovisiblesByWeight(const int& w);
+  bool hasChild(boost::shared_ptr<Keyframe> pKF);
+  set<boost::shared_ptr<Keyframe>> GetLoopEdges();
+  boost::shared_ptr<Keyframe> GetParent();
+  void AddLoopEdge(boost::shared_ptr<Keyframe> pKF);
+  set<boost::shared_ptr<Keyframe>> GetChilds();
 };
 
 typedef boost::shared_ptr<Keyframe> KeyframePtr;

@@ -101,7 +101,7 @@ class MapPoint : public boost::enable_shared_from_this<MapPoint> {
   long unsigned int mnLoopPointForKF;
   long unsigned int mnCorrectedByKF;
   long unsigned int mnCorrectedReference;
-  cv::Mat mPosGBA;
+  Eigen::Vector3d mPosGBA;
   long unsigned int mnBAGlobalForKF;
 
   static std::mutex mGlobalMutex;

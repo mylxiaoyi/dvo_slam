@@ -82,6 +82,9 @@ add_library(${PROJECT_NAME}
   src/Map.cpp
   src/KeyFrameDatabase.cpp
   src/PnPsolver.cpp
+  src/LoopClosing.cpp
+  src/Sim3Solver.cpp
+  src/Converter.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -90,6 +93,7 @@ target_link_libraries(${PROJECT_NAME}
   ${G2O_SOLVER_EIGEN}
   ${G2O_TYPES_SLAM3D}
   ${G2O_TYPES_SBA}
+  ${G2O_TYPES_SIM3}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
   ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so

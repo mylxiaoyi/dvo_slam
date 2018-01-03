@@ -478,7 +478,10 @@ HEADERS += dvo_benchmark/include/dvo_benchmark/file_reader.h \
     dvo_slam/include/dvo_slam/KeyFrameDatabase.h \
     dvo_slam/include/dvo_slam/keyframe.h \
     dvo_slam/include/dvo_slam/PnPsolver.h \
-    dvo_slam/include/dvo_slam/mappoint.h
+    dvo_slam/include/dvo_slam/mappoint.h \
+    dvo_slam/include/dvo_slam/LoopClosing.h \
+    dvo_slam/include/dvo_slam/Sim3Solver.h \
+    dvo_slam/include/dvo_slam/Converter.h
 FORMS += g2o/g2o/g2o/apps/g2o_viewer/base_main_window.ui \
          g2o/g2o/g2o/apps/g2o_viewer/base_properties_widget.ui \
          g2o/g2o/g2o/examples/slam2d/base_main_window.ui
@@ -777,4 +780,7 @@ SOURCES += dvo_benchmark/src/benchmark.cpp \
     dvo_slam/src/Optimizer.cpp \
     dvo_slam/src/Map.cpp \
     dvo_slam/src/KeyFrameDatabase.cpp \
-    dvo_slam/src/PnPsolver.cpp
+    dvo_slam/src/PnPsolver.cpp \
+    dvo_slam/src/LoopClosing.cpp \
+    dvo_slam/src/Sim3Solver.cpp \
+    dvo_slam/src/Converter.cpp
